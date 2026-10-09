@@ -4,7 +4,10 @@ local Gamepad = require("device/sdl/gamepad")
 local Generic = require("device/generic/device")
 local Key = require("device/key")
 local UIManager
-local SDL = require("ffi/SDL3")
+local ok, SDL = pcall(require, "ffi/SDL3")
+if not ok then
+    SDL = require("ffi/SDL2_0")
+end
 local ffi = require("ffi")
 local logger = require("logger")
 local time = require("ui/time")
@@ -26,7 +29,11 @@ local function isUrl(s)
 end
 
 local function isCommand(s)
-    return os.execute("command -v "..s.." >/dev/null") == 0
+    if jit.os == "Windows" then
+        return os.execute("where "..s.." >nul 2>&1") == 0
+    else
+        return os.execute("command -v "..s.." >/dev/null") == 0
+    end
 end
 
 local function runCommand(command)
@@ -45,7 +52,9 @@ local function getDesktopDicts()
 end
 
 local function getLinkOpener()
-    if jit.os == "Linux" and isCommand("xdg-open") then
+    if jit.os == "Windows" then
+        return true, "start"
+    elseif jit.os == "Linux" and isCommand("xdg-open") then
         return true, "xdg-open"
     elseif jit.os == "OSX" and isCommand("open") then
         return true, "open"
@@ -187,7 +196,11 @@ function Device:init()
     end
 
     self.hasClipboard = yes
-    self.screen = require("ffi/framebuffer_SDL3"):new{
+    local ok2, fb = pcall(require, "ffi/framebuffer_SDL3")
+    if not ok2 then
+        fb = require("ffi/framebuffer_SDL2_0")
+    end
+    self.screen = fb:new{
         device = self,
         debug = logger.dbg,
         w = self.window.width,
@@ -256,7 +269,7 @@ function Device:init()
         event_map = dofile("frontend/device/sdl/event_map_sdl2.lua"),
         handleSdlEv = function(device_input, ev)
 
-            if ev.code == SDL.SDL.SDL_EVENT_MOUSE_WHEEL and (ev.value.integer_x ~= 0 or ev.value.integer_y ~= 0) then
+            if ev.code == SDL.SDL_EVENT_MOUSE_WHEEL and (ev.value.integer_x ~= 0 or ev.value.integer_y ~= 0) then
                 local pos = Geom:new{
                     x = 0,
                     y = 0,
@@ -287,13 +300,13 @@ function Device:init()
                 local fake_release_ev = Event:new("Gesture", fake_ges_release)
                 UIManager:sendEvent(fake_pan_ev)
                 UIManager:sendEvent(fake_release_ev)
-            elseif ev.code == SDL.SDL.SDL_EVENT_DROP_FILE then
+            elseif ev.code == SDL.SDL_EVENT_DROP_FILE then
                 local dropped_file_path = ev.value
                 if dropped_file_path and dropped_file_path ~= "" then
                     local ReaderUI = require("apps/reader/readerui")
                     ReaderUI:doShowReader(dropped_file_path)
                 end
-            elseif ev.code == SDL.SDL.SDL_EVENT_WINDOW_RESIZED then
+            elseif ev.code == SDL.SDL_EVENT_WINDOW_RESIZED then
                 device_input.device.screen.resize(device_input.device.screen, ev.value.data1, ev.value.data2)
                 self.window.width = ev.value.data1
                 self.window.height = ev.value.data2
@@ -322,10 +335,10 @@ function Device:init()
 
                 -- make sure dialogs are displayed
                 UIManager:setDirty("all", "ui")
-            elseif ev.code == SDL.SDL.SDL_EVENT_WINDOW_MOVED then
+            elseif ev.code == SDL.SDL_EVENT_WINDOW_MOVED then
                 self.window.left = ev.value.data1
                 self.window.top = ev.value.data2
-            elseif ev.code == SDL.SDL.SDL_EVENT_GAMEPAD_AXIS_MOTION then
+            elseif ev.code == SDL.SDL_EVENT_GAMEPAD_AXIS_MOTION then
                 local should_process = Gamepad:shouldProcessAxisMotion(ev.value.axis, ev.value.value)
                 local held_direction = Gamepad:getHeldDirection(ev.value.axis)
 
@@ -341,14 +354,14 @@ function Device:init()
                     dispatchGamepadAxisMotion(ev.value.axis, ev.value.value, time.timeval(ev.time))
                 end
                 return
-            elseif ev.code == SDL.SDL.SDL_EVENT_GAMEPAD_BUTTON_DOWN then
+            elseif ev.code == SDL.SDL_EVENT_GAMEPAD_BUTTON_DOWN then
                 -- Broadcast for plugins; if not handled, emit default key events
                 if not UIManager:broadcastEvent(Event:new("GamepadButtonDown", ev.value)) then
                     return makeKeyPressEvent(Gamepad:getButtonKeyName(ev.value.button))
                 end
-            elseif ev.code == SDL.SDL.SDL_EVENT_GAMEPAD_BUTTON_UP then
+            elseif ev.code == SDL.SDL_EVENT_GAMEPAD_BUTTON_UP then
                 UIManager:broadcastEvent(Event:new("GamepadButtonUp", ev.value))
-            elseif ev.code == SDL.SDL.SDL_EVENT_TEXT_INPUT then
+            elseif ev.code == SDL.SDL_EVENT_TEXT_INPUT then
                 UIManager:sendEvent(Event:new("TextInput", tostring(ev.value)))
             end
         end,
@@ -375,6 +388,12 @@ end
 
 function Device:setDateTime(year, month, day, hour, min, sec)
     if hour == nil or min == nil then return true end
+    if jit.os == "Windows" then
+        -- Windows: use Win32 API via PowerShell or just return true (no-op)
+        -- Setting system time requires admin privileges on Windows
+        logger.warn("setDateTime not supported on Windows without admin privileges")
+        return false
+    end
     local command
     if year and month and day then
         command = string.format("date -s '%d-%d-%d %d:%d:%d'", year, month, day, hour, min, sec)
@@ -449,7 +468,11 @@ function Device:initNetworkManager(NetworkMgr)
         if not default_gw then
             return false
         end
-        return 0 == os.execute("ping -c1 -w2 " .. default_gw .. " > /dev/null")
+        if jit.os == "Windows" then
+            return 0 == os.execute("ping -n 1 -w 2000 " .. default_gw .. " >nul 2>&1")
+        else
+            return 0 == os.execute("ping -c1 -w2 " .. default_gw .. " > /dev/null")
+        end
     end
 end
 

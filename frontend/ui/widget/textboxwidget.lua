@@ -857,11 +857,13 @@ function TextBoxWidget:_renderText(start_row_idx, end_row_idx)
     if (self.line_num_to_image and self.line_num_to_image[start_row_idx]) or color_fg or color_bg then
         bbtype = Screen:isColorEnabled() and Blitbuffer.TYPE_BBRGB32 or Blitbuffer.TYPE_BB8
     end
+    -- Force BB8 on Windows for now to avoid missing RGB32 methods
+    if jit.os == "Windows" then bbtype = Blitbuffer.TYPE_BB8 end
     self._bb = Blitbuffer.new(self.width, h, bbtype)
     if not color_bg then
         self._bb:fill(self.bgcolor)
     else
-        self._bb:paintRectRGB32(0, 0, self._bb:getWidth(), self._bb:getHeight(), self.bgcolor)
+        self._bb:paintRect(0, 0, self._bb:getWidth(), self._bb:getHeight(), self.bgcolor)
     end
 
     local y = self.line_glyph_baseline

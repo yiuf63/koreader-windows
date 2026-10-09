@@ -92,6 +92,34 @@ local logger = require("logger")
 
 local C = ffi.C
 
+-- Windows doesn't have clock_gettime as a DLL export; use gettimeofday instead
+local clock_gettime_impl
+local clock_getres_impl
+if jit.os == "Windows" then
+    ffi.cdef[[
+    typedef long long LARGE_INTEGER;
+    int QueryPerformanceCounter(LARGE_INTEGER *lpPerformanceCount);
+    int QueryPerformanceFrequency(LARGE_INTEGER *lpFrequency);
+    ]]
+    local qpc_freq = ffi.new("LARGE_INTEGER[1]")
+    C.QueryPerformanceFrequency(qpc_freq)
+    local freq = tonumber(qpc_freq[0])
+    local start_counter = ffi.new("LARGE_INTEGER[1]")
+    C.QueryPerformanceCounter(start_counter)
+    local start_val = tonumber(start_counter[0])
+    clock_gettime_impl = function(clockid, ts_ptr)
+        local counter = ffi.new("LARGE_INTEGER[1]")
+        C.QueryPerformanceCounter(counter)
+        local elapsed_us = math.floor((tonumber(counter[0]) - start_val) * 1000000 / freq)
+        ts_ptr.tv_sec = math.floor(elapsed_us / 1000000)
+        ts_ptr.tv_nsec = (elapsed_us % 1000000) * 1000
+        return 0
+    end
+else
+    clock_gettime_impl = C.clock_gettime
+    clock_getres_impl = C.clock_getres
+end
+
 -- An FTS_PRECISION of 1e6 will give us a µs precision.
 local FTS_PRECISION = 1e6
 
@@ -176,7 +204,7 @@ function time.split_s_us(time_fts)
     return sec, usec
 end
 
--- ffi object for C.clock_gettime calls
+-- ffi object for clock_gettime_impl calls
 local timespec = ffi.new("struct timespec")
 
 -- We prefer CLOCK_MONOTONIC_COARSE if it's available and has a decent resolution,
@@ -191,7 +219,7 @@ if ffi.os == "Linux" then
     -- Unfortunately, it was only implemented in Linux 2.6.32, and we may run on older kernels than that...
     -- So, just probe it to see if we can rely on it.
     local probe_ts = ffi.new("struct timespec")
-    if C.clock_getres(C.CLOCK_MONOTONIC_COARSE, probe_ts) == 0 then
+    if clock_getres_impl and clock_getres_impl(C.CLOCK_MONOTONIC_COARSE, probe_ts) == 0 then
         -- Now, it usually has a 1ms resolution on modern x86_64 systems,
         -- but it only provides a 10ms resolution on all my armv7 devices :/.
         if probe_ts.tv_sec == 0 and probe_ts.tv_nsec <= 1000000 then
@@ -199,14 +227,14 @@ if ffi.os == "Linux" then
         end
     end
     logger.dbg("fts: Preferred MONOTONIC clock source is", PREFERRED_MONOTONIC_CLOCKID == C.CLOCK_MONOTONIC_COARSE and "CLOCK_MONOTONIC_COARSE" or "CLOCK_MONOTONIC")
-    if C.clock_getres(C.CLOCK_REALTIME_COARSE, probe_ts) == 0 then
+    if clock_getres_impl and clock_getres_impl(C.CLOCK_REALTIME_COARSE, probe_ts) == 0 then
         if probe_ts.tv_sec == 0 and probe_ts.tv_nsec <= 1000000 then
             PREFERRED_REALTIME_CLOCKID = C.CLOCK_REALTIME_COARSE
         end
     end
     logger.dbg("fts: Preferred REALTIME clock source is", PREFERRED_REALTIME_CLOCKID == C.CLOCK_REALTIME_COARSE and "CLOCK_REALTIME_COARSE" or "CLOCK_REALTIME")
 
-    if C.clock_getres(C.CLOCK_BOOTTIME, probe_ts) == 0 then
+    if clock_getres_impl and clock_getres_impl(C.CLOCK_BOOTTIME, probe_ts) == 0 then
         HAVE_BOOTTIME = true
     end
     logger.dbg("fts: BOOTTIME clock source is", HAVE_BOOTTIME and "supported" or "NOT supported")
@@ -232,7 +260,7 @@ Which means that, yes, this is a fancier POSIX Epoch ;).
 @treturn fts fixed point time
 ]]
 function time.realtime()
-    C.clock_gettime(C.CLOCK_REALTIME, timespec)
+    clock_gettime_impl(C.CLOCK_REALTIME, timespec)
     -- TIMESPEC_TO_FTS
     return tonumber(timespec.tv_sec) * S2FTS + math.floor(tonumber(timespec.tv_nsec) * NS2FTS)
 end
@@ -247,21 +275,21 @@ On Linux, this will not account for time spent with the device in suspend (unlik
 @treturn fts fixed point time
 ]]
 function time.monotonic()
-    C.clock_gettime(C.CLOCK_MONOTONIC, timespec)
+    clock_gettime_impl(C.CLOCK_MONOTONIC, timespec)
     -- TIMESPEC_TO_FTS
     return tonumber(timespec.tv_sec) * S2FTS + math.floor(tonumber(timespec.tv_nsec) * NS2FTS)
 end
 
 --- Ditto, but w/ CLOCK_MONOTONIC_COARSE if it's available and has a 1ms resolution or better (uses CLOCK_MONOTONIC otherwise).
 function time.monotonic_coarse()
-    C.clock_gettime(PREFERRED_MONOTONIC_CLOCKID, timespec)
+    clock_gettime_impl(PREFERRED_MONOTONIC_CLOCKID, timespec)
     -- TIMESPEC_TO_FTS
     return tonumber(timespec.tv_sec) * S2FTS + math.floor(tonumber(timespec.tv_nsec) * NS2FTS)
 end
 
 -- Ditto, but w/ CLOCK_REALTIME_COARSE if it's available and has a 1ms resolution or better (uses CLOCK_REALTIME otherwise).
 function time.realtime_coarse()
-    C.clock_gettime(PREFERRED_REALTIME_CLOCKID, timespec)
+    clock_gettime_impl(PREFERRED_REALTIME_CLOCKID, timespec)
     -- TIMESPEC_TO_FTS
     return tonumber(timespec.tv_sec) * S2FTS + math.floor(tonumber(timespec.tv_nsec) * NS2FTS)
     end
@@ -271,7 +299,7 @@ if HAVE_BOOTTIME then
     --- Ditto, but w/ CLOCK_BOOTTIME (will return an fts time set to 0, 0 if the clock source is unsupported, as it's 2.6.39+)
     --- Only use it if you *know* it's going to be supported, otherwise, prefer the four following aliases.
     function time.boottime()
-        C.clock_gettime(C.CLOCK_BOOTTIME, timespec)
+        clock_gettime_impl(C.CLOCK_BOOTTIME, timespec)
         -- TIMESPEC_TO_FTS
     return tonumber(timespec.tv_sec) * S2FTS + math.floor(tonumber(timespec.tv_nsec) * NS2FTS)
     end

@@ -206,7 +206,7 @@ function BookInfoManager:openDbConnection()
         self:createDB()
     end
     self.db_conn = SQ3.open(self.db_location)
-    self.db_conn:set_busy_timeout(5000) -- 5 seconds
+    pcall(function() self.db_conn:set_busy_timeout(5000) end) -- 5 seconds
 
     -- Prepare our most often used SQL statements
     self.set_stmt = self.db_conn:prepare(BOOKINFO_INSERT_SQL)

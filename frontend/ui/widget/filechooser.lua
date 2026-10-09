@@ -277,6 +277,7 @@ function FileChooser:genItemTable(dirs, files, path)
                 text = _("Long-press here to choose current folder"),
                 bold = true,
                 path = path.."/.",
+                is_synthetic_text = true, -- already UTF-8, skip Windows conversion
             })
         end
     end
@@ -285,7 +286,7 @@ function FileChooser:genItemTable(dirs, files, path)
     -- Windows we need to encode them to utf-8
     if ffi.os == "Windows" then
         for _, v in ipairs(item_table) do
-            if v.text then
+            if v.text and not v.is_go_up and not v.is_synthetic_text then
                 v.text = ffiUtil.multiByteToUTF8(v.text) or ""
             end
         end

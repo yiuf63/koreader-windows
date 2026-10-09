@@ -127,7 +127,7 @@ function Version:updateVersionLog(current_model)
     if self.rev ~= last_version or current_model ~= last_model then
         -- Appends KOReader git-rev, model and current date to the `VERSION_LOG_FILE`
         -- in the format 'YYYY-mm-dd, HH:MM:SS, git-rev, model'
-        self:appendToLogFile(os.date("%Y-%m-%d, %X, ") .. self.rev .. ", " .. current_model)
+        self:appendToLogFile(os.date("%Y-%m-%d, %X, ") .. (self.rev or "unknown") .. ", " .. current_model)
     end
 end
 

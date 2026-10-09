@@ -55,7 +55,10 @@ function ReaderPageMap:_postInit()
     -- It's possible that the crengine doc cache is inconsistent with our setting
     -- (cache from a past opening, settings sync'ed from another device).
     -- Make sure we're consistent, honoring the cre cache values to avoid a document reload.
-    local chars_per_synthetic_page = self.ui.document:getSyntheticPageMapCharsPerPage()
+    local chars_per_synthetic_page = 0
+    if self.ui.document.getSyntheticPageMapCharsPerPage then
+        chars_per_synthetic_page = self.ui.document:getSyntheticPageMapCharsPerPage()
+    end
     if chars_per_synthetic_page > 0 then
         self.chars_per_synthetic_page = chars_per_synthetic_page
         self.ui.doc_settings:saveSetting("pagemap_chars_per_synthetic_page", chars_per_synthetic_page)

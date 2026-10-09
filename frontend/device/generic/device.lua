@@ -776,6 +776,21 @@ function Device:ping4(ip)
 end
 
 function Device:getDefaultRoute(interface)
+    if jit.os == "Windows" then
+        -- Windows: use ipconfig to get default gateway
+        local handle = io.popen("ipconfig | findstr /i \"Default Gateway\"")
+        if handle then
+            local result = handle:read("*a")
+            handle:close()
+            -- Extract IP address from line like "   Default Gateway . . . . . . . . . : 192.168.1.1"
+            local gw = result:match("(%d+%.%d+%.%d+%.%d+)")
+            if gw then
+                return gw
+            end
+        end
+        return
+    end
+
     local fd = io.open("/proc/net/route", "re")
     if not fd then
         return

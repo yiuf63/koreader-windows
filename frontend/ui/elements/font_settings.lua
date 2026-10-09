@@ -29,6 +29,10 @@ local function getDir(isUser)
         if jit.os == "OSX" then
             return isUser and home .. "/" .. MACOS_FONT_PATH
                            or "/" .. MACOS_FONT_PATH
+        elseif jit.os == "Windows" then
+            local WINDOWS_FONT_PATH = home .. "/AppData/Local/Microsoft/Windows/Fonts"
+            local WINDOWS_SYS_FONT_PATH = "C:/Windows/Fonts"
+            return isUser and WINDOWS_FONT_PATH or WINDOWS_SYS_FONT_PATH
         else
             return isUser and LINUX_FONT_PATH
                            or LINUX_SYS_FONT_PATH

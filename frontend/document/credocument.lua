@@ -107,8 +107,10 @@ function CreDocument:engineInit()
         -- as that stuff may not care about properly closing
         -- the document, skip cre.cpp finalizer to avoid any
         -- assertion failure.
-        require("ffi/util").addRunInSubProcessAfterForkFunc("cre_skip_teardown", function()
-            cre.setSkipTearDown(true)
+        pcall(function()
+            require("ffi/util").addRunInSubProcessAfterForkFunc("cre_skip_teardown", function()
+                cre.setSkipTearDown(true)
+            end)
         end)
 
         -- initialize cache
@@ -174,6 +176,8 @@ function CreDocument:init()
         error(self._document)  -- will contain error message
     end
 
+
+
     -- We would have liked to call self._document:loadDocument(self.file)
     -- here, to detect early if file is a supported document, but we
     -- need to delay it till after some crengine settings are set for a
@@ -218,7 +222,9 @@ function CreDocument:setAltDocumentProp(prop, value)
     if type(value) == "number" then -- series index
         value = tostring(value)
     end
-    self._document:setAltDocumentProp(self.prop_to_cre_prop[prop], value)
+    if self._document.setAltDocumentProp then
+        self._document:setAltDocumentProp(self.prop_to_cre_prop[prop], value)
+    end
 end
 
 function CreDocument:setupDefaultView()
@@ -1400,7 +1406,9 @@ end
 
 function CreDocument:setPageInfoOverride(pageinfo)
     logger.dbg("CreDocument: set page info", pageinfo)
-    self._document:setPageInfoOverride(pageinfo)
+    if self._document.setPageInfoOverride then
+        self._document:setPageInfoOverride(pageinfo)
+    end
 end
 
 function CreDocument:isXPointerInCurrentPage(xp)
@@ -1524,7 +1532,7 @@ end
 function CreDocument:buildSyntheticPageMapIfNoneDocumentProvided(chars_per_synthetic_page)
     -- for backward compatibility with legacy user patches
     -- https://github.com/koreader/koreader/issues/9020#issuecomment-2033259217
-    if not self._document:hasPageMapDocumentProvided() then
+    if self._document.hasPageMapDocumentProvided and not self._document:hasPageMapDocumentProvided() then
         self._document:buildSyntheticPageMap(chars_per_synthetic_page or 1024)
     end
 end
@@ -1535,6 +1543,7 @@ end
 
 function CreDocument:getSyntheticPageMapCharsPerPage()
     -- returns 0 if no synthetic pagemap
+    if not self._document.getSyntheticPageMapCharsPerPage then return 0 end
     return self._document:getSyntheticPageMapCharsPerPage()
 end
 
@@ -1543,10 +1552,12 @@ function CreDocument:isPageMapSynthetic()
 end
 
 function CreDocument:hasPageMapDocumentProvided()
+    if not self._document.hasPageMapDocumentProvided then return false end
     return self._document:hasPageMapDocumentProvided()
 end
 
 function CreDocument:isPageMapDocumentProvided()
+    if not self._document.isPageMapDocumentProvided then return false end
     return self._document:isPageMapDocumentProvided()
 end
 

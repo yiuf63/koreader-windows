@@ -27,10 +27,21 @@ local band = bit.band
 --   shared_state[1] = 0 or 1, set by subprocess when rendering done, waiting to save cache
 --   shared_state[2] = 0 or 1, set by main process when subprocess can go on saving cache
 local ffi = require("ffi")
-local shared_state_data = ffi.C.mmap(nil, 3*ffi.sizeof("uint32_t"), bit.bor(ffi.C.PROT_READ, ffi.C.PROT_WRITE),
+local shared_state_data
+if jit.os == "Windows" then
+    shared_state_data = ffi.C.malloc(3 * ffi.sizeof("uint32_t"))
+else
+    shared_state_data = ffi.C.mmap(nil, 3*ffi.sizeof("uint32_t"), bit.bor(ffi.C.PROT_READ, ffi.C.PROT_WRITE),
                                        bit.bor(ffi.C.MAP_SHARED, ffi.C.MAP_ANONYMOUS), -1, 0)
+end
 local shared_state = ffi.cast("uint32_t*", shared_state_data)
-local koreader_pid = ffi.C.getpid()
+local koreader_pid
+if jit.os == "Windows" then
+    ffi.cdef("int _getpid(void);")
+    koreader_pid = ffi.C._getpid()
+else
+    koreader_pid = ffi.C.getpid()
+end
 
 --[[
     Rolling is just like paging in page-based documents except that

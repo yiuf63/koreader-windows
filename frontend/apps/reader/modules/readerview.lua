@@ -689,7 +689,7 @@ function ReaderView:drawHighlightRect(bb, _x, _y, rect, drawer, color, draw_note
         if Blitbuffer.isColor8(color) then
             bb:paintRect(x, y + h - 1, w, Size.line.thick, color)
         else
-            bb:paintRectRGB32(x, y + h - 1, w, Size.line.thick, Screen.night_mode and color:invert() or color)
+            bb:paintRect(x, y + h - 1, w, Size.line.thick, Screen.night_mode and color:invert() or color)
         end
     elseif drawer == "strikeout" then
         if not color then
@@ -702,7 +702,7 @@ function ReaderView:drawHighlightRect(bb, _x, _y, rect, drawer, color, draw_note
         if Blitbuffer.isColor8(color) then
             bb:paintRect(x, line_y, w, Size.line.medium, color)
         else
-            bb:paintRectRGB32(x, line_y, w, Size.line.medium, Screen.night_mode and color:invert() or color)
+            bb:paintRect(x, line_y, w, Size.line.medium, Screen.night_mode and color:invert() or color)
         end
     elseif drawer == "invert" then
         bb:invertRect(x, y, w, h)
@@ -726,7 +726,7 @@ function ReaderView:drawHighlightRect(bb, _x, _y, rect, drawer, color, draw_note
                 if Blitbuffer.isColor8(color) then
                     bb:paintRect(note_mark_pos_x, y, self.note_mark_line_w, rect.h, color)
                 else
-                    bb:paintRectRGB32(note_mark_pos_x, y, self.note_mark_line_w, rect.h, Screen.night_mode and color:invert() or color)
+                    bb:paintRect(note_mark_pos_x, y, self.note_mark_line_w, rect.h, Screen.night_mode and color:invert() or color)
                 end
             elseif self.highlight.note_mark == "sidemark" then
                 if draw_note_mark then

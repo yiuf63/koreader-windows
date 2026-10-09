@@ -102,7 +102,9 @@ local codecs = {
                 return nil, "failed to write file"
             end
             C.fflush(f)
-            C.fsync(C.fileno(f))
+            if jit.os ~= "Windows" then
+                C.fsync(C.fileno(f))
+            end
             C.fclose(f)
             C.free(cbuff)
             --- @note: Slight API extension for TileCacheItem, which needs to know the on-disk size, and saves us a :size() call

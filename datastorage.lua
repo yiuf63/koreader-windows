@@ -38,6 +38,18 @@ function DataStorage:getDataDir()
             end
             data_dir = string.format("%s/%s", user_rw, "koreader")
         end
+    elseif jit.os == "Windows" then
+        local appdata = os.getenv("APPDATA")
+        if appdata then
+            data_dir = appdata:gsub("\\", "/") .. "/koreader"
+        else
+            local userprofile = os.getenv("USERPROFILE") or os.getenv("HOME")
+            if userprofile then
+                data_dir = userprofile:gsub("\\", "/") .. "/koreader"
+            else
+                data_dir = "./koreader-data"
+            end
+        end
     else
         data_dir = "."
     end
@@ -81,9 +93,10 @@ end
 function DataStorage:getFullDataDir()
     if full_data_dir then return full_data_dir end
 
-    if string.sub(self:getDataDir(), 1, 1) == "/" then
-        full_data_dir = self:getDataDir()
-    elseif self:getDataDir() == "." then
+    local dir = self:getDataDir()
+    if string.sub(dir, 1, 1) == "/" or string.match(dir, "^%a:") then
+        full_data_dir = dir
+    elseif dir == "." then
         full_data_dir = lfs.currentdir()
     end
 

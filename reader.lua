@@ -27,7 +27,7 @@ userpatch.applyPatches(userpatch.early_once)
 userpatch.applyPatches(userpatch.early)
 
 local Version = require("version")
-io.write(" [*] Version: ", Version:getCurrentRevision(), "\n\n")
+io.write(" [*] Version: ", Version:getCurrentRevision() or "unknown", "\n\n")
 
 -- Load default settings
 G_defaults = require("luadefaults"):open()

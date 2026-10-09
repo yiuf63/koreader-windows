@@ -423,31 +423,63 @@ function QuickStart:getQuickStart()
             -- Fix links to images, which are in KOReader install directory, which may not
             -- be alongside help/ on some platforms like Android.
             -- crengine won't accept full paths, so we need to make these relative
-            local src = FFIUtil.realpath(quickstart_dir) .. "/"
-            local dst = lfs.currentdir() .. "/"
-            -- Find the common leading directories
-            local idx = 0
-            while true do
-                local tst = src:find("/", idx + 1, true)
-                if tst and src:sub(1,tst) == dst:sub(1,tst) then
-                    idx = tst
-                else
-                    break
+            local relpath
+            if jit.os == "Windows" then
+                -- On Windows, the install dir and the data dir may live on
+                -- different drives, so no relative path can reach the resources.
+                -- Copy the ones referenced by the guide next to the HTML file
+                -- instead, so that plain relative paths (from the HTML file's
+                -- directory) keep working.
+                local resources_src = lfs.currentdir() .. "/resources"
+                local resources_dst = quickstart_dir .. "/resources"
+                if lfs.attributes(resources_dst, "mode") ~= "directory" then
+                    local function copyDirRecursively(from, to)
+                        local attr = lfs.attributes(from)
+                        if not attr then return end
+                        if attr.mode == "directory" then
+                            lfs.mkdir(to)
+                            for f in lfs.dir(from) do
+                                if f ~= "." and f ~= ".." then
+                                    copyDirRecursively(from .. "/" .. f, to .. "/" .. f)
+                                end
+                            end
+                        else
+                            FFIUtil.copyFile(from, to)
+                        end
+                    end
+                    lfs.mkdir(resources_dst)
+                    copyDirRecursively(resources_src .. "/quickstart", resources_dst .. "/quickstart")
+                    copyDirRecursively(resources_src .. "/icons", resources_dst .. "/icons")
+                    FFIUtil.copyFile(resources_src .. "/koreader.svg", resources_dst .. "/koreader.svg")
                 end
+                relpath = ""
+            else
+                local src = FFIUtil.realpath(quickstart_dir) .. "/"
+                local dst = lfs.currentdir() .. "/"
+                -- Find the common leading directories
+                local idx = 0
+                while true do
+                    local tst = src:find("/", idx + 1, true)
+                    if tst and src:sub(1,tst) == dst:sub(1,tst) then
+                        idx = tst
+                    else
+                        break
+                    end
+                end
+                -- Trim off the common directories from the front
+                src = src:sub(idx + 1)
+                dst = dst:sub(idx + 1)
+                -- Back up from dst to get to this common parent
+                relpath = ""
+                idx = src:find("/")
+                while idx do
+                    relpath = relpath .. "../"
+                    idx = src:find("/", idx + 1)
+                end
+                -- Add the path down to dst from here
+                relpath = relpath .. dst
+                relpath = relpath:gsub("//", "/") -- make it prettier
             end
-            -- Trim off the common directories from the front
-            src = src:sub(idx + 1)
-            dst = dst:sub(idx + 1)
-            -- Back up from dst to get to this common parent
-            local relpath = ""
-            idx = src:find("/")
-            while idx do
-                relpath = relpath .. "../"
-                idx = src:find("/", idx + 1)
-            end
-            -- Add the path down to dst from here
-            relpath = relpath .. dst
-            relpath = relpath:gsub("//", "/") -- make it prettier
             quickstart_html = quickstart_html:gsub([[src="resources/]], [[src="]]..relpath..[[resources/]])
             if Language:isLanguageRTL(language) then
                 quickstart_html = quickstart_html:gsub('<html>', '<html dir="rtl">')

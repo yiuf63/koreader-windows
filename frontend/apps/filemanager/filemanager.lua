@@ -1399,6 +1399,18 @@ function FileManager:onShowFolderMenu()
             indent = indent + 1
         end
     end
+
+    -- Windows drives (drive letters are not reachable through ".." from a
+    -- drive root, so offer them directly)
+    if jit.os == "Windows" then
+        local drives = ffiUtil.getWindowsDrives()
+        if #drives > 0 then
+            table.insert(buttons, {}) -- separator
+            for _, drive in ipairs(drives) do
+                table.insert(buttons, genButton(drive, drive))
+            end
+        end
+    end
     -- subfolders
     if FileChooser.show_flat_view then
         local subfolders = {}
