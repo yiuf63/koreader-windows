@@ -120,6 +120,12 @@ A few details are Windows-specific and worth knowing about when debugging:
   thirdparty sources are checked out with CRLF while the patches are stored
   with LF. Patches are applied with `--ignore-whitespace` for that reason.
 
+- **Patched submodules show up as dirty.** crengine is a submodule that is
+  patched in place (there is no download step to unpack it into), so
+  `git status` reports it as modified once built. That is expected: the patch is
+  re-applied from its pristine state on every build, so
+  `git submodule update --force` is always safe.
+
 ## Data directory
 
 Configuration and caches live in `%APPDATA%\koreader`, not next to the
