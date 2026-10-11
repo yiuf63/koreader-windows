@@ -239,6 +239,9 @@ modifications with the KOReader frontend. NOTE: this only supports relative path
 
 Once you have the emulator ready to rock you can [build for other platforms too](Building_targets.md).
 
+To build a native Windows executable with MSYS2/MinGW-w64, see
+[Building for Windows](Building_Windows.md).
+
 ## Testing
 
 To automatically set up a number of primarily luarocks-related environment variables:

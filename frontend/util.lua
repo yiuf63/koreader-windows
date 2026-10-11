@@ -1029,12 +1029,14 @@ end
 --- Splits a file into its directory path and file name.
 --- If the given path has a trailing /, returns the entire path as the directory
 --- path and "" as the file name.
+--- NOTE: Windows paths use backslashes, so both separators are recognized (the
+---       returned directory keeps whichever separator the input used).
 ---- @string file
 ---- @treturn string directory, filename
 function util.splitFilePathName(file)
     if file == nil or file == "" then return "", "" end
-    if string.find(file, "/") == nil then return "", file end
-    return file:match("(.*/)(.*)")
+    if string.find(file, "[/\\]") == nil then return "", file end
+    return file:match("(.*[/\\])(.*)")
 end
 
 --- Splits a file name into its pure file name and suffix

@@ -36,6 +36,16 @@ luacov.stats.out
 trace-out.txt
 koreader-*
 
+# Populated by the build: the launcher and its runtime libraries are linked
+# into the install directory, but a plain in-tree run (`koreader.exe` from the
+# repo root) needs them here too.
+/koreader.exe
+/lua51.dll
+/libs/
+/common/*
+!/common/json.lua
+!/common/lua-ljsqlite3/
+
 i18n
 
 /.cproject

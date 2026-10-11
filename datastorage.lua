@@ -16,8 +16,15 @@ local full_data_dir
 function DataStorage:getDataDir()
     if data_dir then return data_dir end
 
+    -- KOReader works with forward slashes internally; Windows hands us
+    -- backslashes (in `%APPDATA%`, `%HOME%`, and `lfs.currentdir()`), so
+    -- normalize whatever ends up in `data_dir`.
+    local function to_forward_slashes(path)
+        return (path:gsub("\\", "/"))
+    end
+
     if os.getenv("KO_HOME") then
-        data_dir = os.getenv("KO_HOME")
+        data_dir = to_forward_slashes(os.getenv("KO_HOME"))
     elseif isAndroid then
         data_dir = android.getExternalStoragePath() .. "/koreader"
     elseif os.getenv("UBUNTU_APPLICATION_ISOLATION") then
@@ -25,6 +32,16 @@ function DataStorage:getDataDir()
         local package_name = app_id:match("^(.-)_")
         -- confined ubuntu app has write access to this dir
         data_dir = string.format("%s/%s", os.getenv("XDG_DATA_HOME"), package_name)
+    elseif jit.os == "Windows" then
+        -- NOTE: checked before the KO_MULTIUSER branch below, which the Windows
+        --       loader also sets (to get a per-user configuration): it assumes
+        --       an XDG layout that does not exist here.
+        local base = os.getenv("APPDATA") or os.getenv("USERPROFILE") or os.getenv("HOME")
+        if base then
+            data_dir = to_forward_slashes(base) .. "/koreader"
+        else
+            data_dir = "./koreader-data"
+        end
     elseif os.getenv("APPIMAGE") or os.getenv("FLATPAK") or os.getenv("KO_MULTIUSER") then
         if os.getenv("XDG_CONFIG_HOME") then
             data_dir = string.format("%s/%s", os.getenv("XDG_CONFIG_HOME"), "koreader")
@@ -37,18 +54,6 @@ function DataStorage:getDataDir()
                 lfs.mkdir(user_rw)
             end
             data_dir = string.format("%s/%s", user_rw, "koreader")
-        end
-    elseif jit.os == "Windows" then
-        local appdata = os.getenv("APPDATA")
-        if appdata then
-            data_dir = appdata:gsub("\\", "/") .. "/koreader"
-        else
-            local userprofile = os.getenv("USERPROFILE") or os.getenv("HOME")
-            if userprofile then
-                data_dir = userprofile:gsub("\\", "/") .. "/koreader"
-            else
-                data_dir = "./koreader-data"
-            end
         end
     else
         data_dir = "."

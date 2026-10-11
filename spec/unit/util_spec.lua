@@ -300,6 +300,10 @@ describe("util module", function()
         test(nil, "", "")
         test("a/b", "a/", "b")
         test("/b", "/", "b")
+        -- Windows-style paths.
+        test("C:\\a\\b\\c.txt", "C:\\a\\b\\", "c.txt")
+        test("c:\\a\\b", "c:\\a\\", "b")
+        test("C:\\b", "C:\\", "b")
         assert.are_same("/a/b/", util.splitFilePathName("/a/b/c.txt"))
     end)
 

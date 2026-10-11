@@ -27,6 +27,15 @@ int tcflush(int fd, int queue_selector) __attribute__((nothrow, leaf));
 ]]
 
 local function check_prerequisites()
+    -- This plugin drives a Unix pseudoterminal (`/dev/ptmx`, grantpt/unlockpt/
+    -- ptsname, termios...), none of which exist on Windows: it would need a
+    -- completely different implementation on top of ConPTY.
+    -- Bail out before touching any of those symbols.
+    if jit.os == "Windows" then
+        logger.warn("Terminal: not supported on Windows")
+        return false
+    end
+
     -- We of course need to be able to manipulate pseudoterminals,
     -- but Kobo's init scripts fail to set this up...
     if Device:isKobo() then

@@ -117,8 +117,15 @@ function Screenshoter:onScreenshot(screenshot_name, caller_callback)
                 caller_callback()
             end
             local current_path = self.ui.file_chooser and self.ui.file_chooser.path
-            if current_path and current_path .. "/" == screenshot_name:match(".*/") then
-                self.ui.file_chooser:refreshPath()
+            -- NOTE: normalize both sides: the directory part of a screenshot
+            --       name ultimately comes from `lfs` on Windows, which uses
+            --       backslashes, while `file_chooser.path` is forward-slashed.
+            if current_path then
+                local dir = screenshot_name:match("^(.*)[/\\][^/\\]*$")
+                local norm = function(p) return (p:gsub("\\", "/"):gsub("/+$", "")) end
+                if dir and norm(dir) == norm(current_path) then
+                    self.ui.file_chooser:refreshPath()
+                end
             end
         end,
     }

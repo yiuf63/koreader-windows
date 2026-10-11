@@ -5,6 +5,13 @@ local lfs = require("libs/libkoreader-lfs")
 local util = require("util")
 require("ffi/posix_h")
 
+-- There is no `getuid` on Windows (and no root/capability model either); the
+-- whole plugin is built around `ntpd`/`ntpdate` and a Unix-style privileged
+-- clock, none of which exist there.
+if jit.os == "Windows" then
+    return { disabled = true, }
+end
+
 -- We need to be root to be able to set the time (CAP_SYS_TIME)
 if C.getuid() ~= 0 then
     return { disabled = true, }

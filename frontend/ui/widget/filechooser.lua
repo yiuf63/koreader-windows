@@ -426,7 +426,10 @@ end
 function FileChooser:getNextOrPreviousFileInFolder(curr_file, prev)
     local show_filter = FileChooser.show_filter
     FileChooser.show_filter = {}
-    local curr_path = curr_file:match(".*/"):gsub("/$", "")
+    -- NOTE: don't assume a path separator: on Windows the paths coming out of
+    --       `lfs` (and stored in the history) use backslashes. Keep the
+    --       trailing separator, as `getList`/`genItemTable` append to it.
+    local curr_path = curr_file:match("^(.*[/\\])[^/\\]*$") or "."
     local item_table = self:genItemTableFromPath(curr_path)
     FileChooser.show_filter = show_filter
     local top_i, step, is_curr_file_found

@@ -13,6 +13,11 @@ local logger = require("logger")
 local time = require("ui/time")
 local util = require("util")
 
+-- SDL constants live on the library handle: for SDL3 that is `SDL.SDL` (the
+-- module table re-exports the library it loaded), for SDL2 the module *is* the
+-- library. Resolve once, so the event handlers below can just say `SDL_EVENT_*`.
+local SDL_C = SDL.SDL or SDL
+
 -- SDL computes WM_CLASS on X11/Wayland based on process's binary name.
 -- Some desktop environments rely on WM_CLASS to name the app and/or to assign the proper icon.
 if jit.os == "Linux" or jit.os == "BSD" or jit.os == "POSIX" then
@@ -269,7 +274,7 @@ function Device:init()
         event_map = dofile("frontend/device/sdl/event_map_sdl2.lua"),
         handleSdlEv = function(device_input, ev)
 
-            if ev.code == SDL.SDL_EVENT_MOUSE_WHEEL and (ev.value.integer_x ~= 0 or ev.value.integer_y ~= 0) then
+            if ev.code == SDL_C.SDL_EVENT_MOUSE_WHEEL and (ev.value.integer_x ~= 0 or ev.value.integer_y ~= 0) then
                 local pos = Geom:new{
                     x = 0,
                     y = 0,
@@ -300,13 +305,13 @@ function Device:init()
                 local fake_release_ev = Event:new("Gesture", fake_ges_release)
                 UIManager:sendEvent(fake_pan_ev)
                 UIManager:sendEvent(fake_release_ev)
-            elseif ev.code == SDL.SDL_EVENT_DROP_FILE then
+            elseif ev.code == SDL_C.SDL_EVENT_DROP_FILE then
                 local dropped_file_path = ev.value
                 if dropped_file_path and dropped_file_path ~= "" then
                     local ReaderUI = require("apps/reader/readerui")
                     ReaderUI:doShowReader(dropped_file_path)
                 end
-            elseif ev.code == SDL.SDL_EVENT_WINDOW_RESIZED then
+            elseif ev.code == SDL_C.SDL_EVENT_WINDOW_RESIZED then
                 device_input.device.screen.resize(device_input.device.screen, ev.value.data1, ev.value.data2)
                 self.window.width = ev.value.data1
                 self.window.height = ev.value.data2
@@ -335,10 +340,10 @@ function Device:init()
 
                 -- make sure dialogs are displayed
                 UIManager:setDirty("all", "ui")
-            elseif ev.code == SDL.SDL_EVENT_WINDOW_MOVED then
+            elseif ev.code == SDL_C.SDL_EVENT_WINDOW_MOVED then
                 self.window.left = ev.value.data1
                 self.window.top = ev.value.data2
-            elseif ev.code == SDL.SDL_EVENT_GAMEPAD_AXIS_MOTION then
+            elseif ev.code == SDL_C.SDL_EVENT_GAMEPAD_AXIS_MOTION then
                 local should_process = Gamepad:shouldProcessAxisMotion(ev.value.axis, ev.value.value)
                 local held_direction = Gamepad:getHeldDirection(ev.value.axis)
 
@@ -354,14 +359,14 @@ function Device:init()
                     dispatchGamepadAxisMotion(ev.value.axis, ev.value.value, time.timeval(ev.time))
                 end
                 return
-            elseif ev.code == SDL.SDL_EVENT_GAMEPAD_BUTTON_DOWN then
+            elseif ev.code == SDL_C.SDL_EVENT_GAMEPAD_BUTTON_DOWN then
                 -- Broadcast for plugins; if not handled, emit default key events
                 if not UIManager:broadcastEvent(Event:new("GamepadButtonDown", ev.value)) then
                     return makeKeyPressEvent(Gamepad:getButtonKeyName(ev.value.button))
                 end
-            elseif ev.code == SDL.SDL_EVENT_GAMEPAD_BUTTON_UP then
+            elseif ev.code == SDL_C.SDL_EVENT_GAMEPAD_BUTTON_UP then
                 UIManager:broadcastEvent(Event:new("GamepadButtonUp", ev.value))
-            elseif ev.code == SDL.SDL_EVENT_TEXT_INPUT then
+            elseif ev.code == SDL_C.SDL_EVENT_TEXT_INPUT then
                 UIManager:sendEvent(Event:new("TextInput", tostring(ev.value)))
             end
         end,
