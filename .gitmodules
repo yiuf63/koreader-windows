@@ -1,6 +1,9 @@
 [submodule "koreader-base"]
 	path = base
-	url = https://github.com/koreader/koreader-base.git
+	# Points at the fork carrying the Windows support, so a plain
+	# `git submodule update --init` gets a tree that builds here. The commits on
+	# top of upstream are `win32: …`; see doc/Building_Windows.md.
+	url = https://github.com/yiuf63/koreader-base.git
 [submodule "platform/android/luajit-launcher"]
 	path = platform/android/luajit-launcher
 	url = https://github.com/koreader/android-luajit-launcher.git
