@@ -115,7 +115,17 @@ function A.is_true(v,m) if v~=true then fail((m or "expected true")..", got "..t
 function A.is_false(v,m) if v~=false then fail((m or "expected false")..", got "..tostring(v)) end end
 function A.is_nil(v,m) if v~=nil then fail((m or "expected nil")..", got "..tostring(v)) end end
 function A.is_not_nil(v,m) if v==nil then fail(m or "expected not nil") end end
-function A.is_equal(a,b,m) if a~=b then fail((m and (m..": ") or "").."expected "..tostring(b)..", got "..tostring(a)) end end
+-- luassert's signature is `is_equal(expected, actual)`: the *first* argument is
+-- what the spec expects, and the second is what it got. Reporting them the other
+-- way round produces failure messages that name the values backwards, which is
+-- actively misleading — a spec whose two values matched would print
+-- "expected X, got X".
+function A.is_equal(expected, actual, m)
+    if expected ~= actual then
+        fail((m and (m .. ": ") or "") .. "expected " .. tostring(expected)
+             .. ", got " .. tostring(actual))
+    end
+end
 A.are_equal = A.is_equal
 -- luassert's other spellings, which several specs use.
 A.Equals = A.is_equal
@@ -193,6 +203,24 @@ end
 w(string.format("passed: %d", passed))
 w(string.format("failed: %d", failed))
 for _, e in ipairs(errors) do w("  FAIL " .. e) end
+
+-- Tidy up after the specs.
+--
+-- Some of them write to the *working directory* with relative paths — notably
+-- `cachesqlite_spec.lua`/`cache_spec.lua`, which use `db_path = "test.db"`.
+-- Under the normal harness that lands in a scratch checkout and nobody notices;
+-- here the working directory is the application's own directory, so the file
+-- ends up shipped next to `koreader.exe`. Remove the known ones so a test run
+-- does not leave junk in the install tree.
+local leftovers = { "test.db", "test.db-journal", "test.db-wal", "test.db-shm" }
+local removed = {}
+for _, name in ipairs(leftovers) do
+    if os.remove(name) then removed[#removed + 1] = name end
+end
+if #removed > 0 then
+    w("cleaned: " .. table.concat(removed, " "))
+end
+
 w("DONE")
 out:close()
 return true
