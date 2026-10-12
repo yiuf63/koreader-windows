@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
+
+PackageIdentifier: yiuf63.KOReader
+PackageVersion: 2026.10-win32.2
+PackageLocale: en-US
+Publisher: yiuf63
+PublisherUrl: https://github.com/yiuf63
+PublisherSupportUrl: https://github.com/yiuf63/koreader-windows/issues
+Author: yiuf63
+PackageName: KOReader (Windows build)
+PackageUrl: https://github.com/yiuf63/koreader-windows
+License: AGPL-3.0-or-later
+LicenseUrl: https://github.com/yiuf63/koreader-windows/blob/win32-port/COPYING
+ShortDescription: Unofficial Windows build of KOReader, a document viewer for EPUB, PDF, DjVu and other formats.
+Description: |-
+  KOReader is an open-source document viewer optimised for e-ink devices. It
+  supports PDF, DjVu, EPUB, FB2, CBZ, MOBI and plain text, with reflowable
+  layout, dictionary lookup, highlights, and a large set of configurable
+  gestures and settings.
+
+  This is an unofficial, third-party Windows (x64) build of KOReader produced
+  from the upstream source at https://github.com/koreader/koreader. Upstream
+  does not publish a Windows build. It is a portable application: it unpacks
+  into a folder and is launched from koreader.exe.
+
+  This package is not affiliated with or endorsed by the KOReader project.
+Moniker: koreader
+Tags:
+  - ebooks
+  - ebook-reader
+  - epub
+  - pdf
+  - djvu
+  - mobi
+  - cbz
+  - reader
+  - document-viewer
+ReleaseNotesUrl: https://github.com/yiuf63/koreader-windows/releases/tag/v2026.10-win32.2
+ManifestType: defaultLocale
+ManifestVersion: 1.12.0
