@@ -1,186 +1,0 @@
-awk: fatal: cannot open file `BEGIN { print (LR_VER_NUM >= 3.0); }' for reading: No such file or directory
-************ CMAKE_MAKE_PROGRAM: "make" **********
-************ Building for MACHINE: "x86_64-w64-mingw32" **********
-************ PATH: "/c/Users/Yiuf/.mimocode/bin:/mingw64/bin:/usr/local/bin:/usr/bin:/usr/bin:/c/Windows/System32:/c/Windows:/c/Windows/System32/Wbem:/c/Windows/System32/WindowsPowerShell/v1.0:/usr/bin/site_perl:/usr/bin/vendor_perl:/usr/bin/core_perl" **********
-************ CHOST: "x86_64-w64-mingw32" **********
-install -d build/x86_64-w64-mingw32/libs
-install -d thirdparty/luajit/build/x86_64-w64-mingw32
-cd thirdparty/luajit/build/x86_64-w64-mingw32 && \
-	cmake -DCMAKE_TOOLCHAIN_FILE=/d/Code/koreader/base/thirdparty/cmake_modules/CMakeCross.cmake -G "MSYS Makefiles" \
-	-DCC='gcc' \
-	-DXCOMPILE:BOOL=on \
-	-DBASE_CFLAGS='-O2 -ffast-math -pipe -fomit-frame-pointer' \
-	-DHOST_CFLAGS='-march=native -O2 -ffast-math -pipe -fomit-frame-pointer ' \
-	-DLDFLAGS='-Wl,-O1 -Wl,--as-needed  -Wl,--allow-multiple-definition -static-libgcc' -DTARGET_SYS=Windows  \
-	-DTARGET_SONAME='lua51.dll' \
-	-DTARGET_CFLAGS='-O2 -ffast-math -pipe -fomit-frame-pointer     -DLUAJIT_SECURITY_STRHASH=0 -DLUAJIT_SECURITY_STRID=0' \
-	-DCROSS='x86_64-w64-mingw32-' \
-	/d/Code/koreader/base/thirdparty/luajit && \
-	make 
-CMake Warning (dev) at CMakeLists.txt:1 (project):
-  cmake_minimum_required() should be called prior to this top-level project()
-  call.  Please see the cmake-commands(7) manual for usage documentation of
-  both commands.
-This warning is for project developers.  Use -Wno-dev to suppress it.
-
-CMake Deprecation Warning at D:/Code/koreader/base/thirdparty/cmake_modules/CMakeCross.cmake:8 (cmake_minimum_required):
-  Compatibility with CMake < 3.10 will be removed from a future version of
-  CMake.
-
-  Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
-  to tell CMake that the project requires at least <min> but has been updated
-  to work with policies introduced by <max> or earlier.
-Call Stack (most recent call first):
-  C:/msys64/mingw64/share/cmake/Modules/CMakeDetermineSystem.cmake:146 (include)
-  CMakeLists.txt:1 (project)
-
-
-CMake Deprecation Warning at D:/Code/koreader/base/thirdparty/cmake_modules/CMakeCross.cmake:8 (cmake_minimum_required):
-  Compatibility with CMake < 3.10 will be removed from a future version of
-  CMake.
-
-  Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
-  to tell CMake that the project requires at least <min> but has been updated
-  to work with policies introduced by <max> or earlier.
-Call Stack (most recent call first):
-  build/x86_64-w64-mingw32/CMakeFiles/4.3.4/CMakeSystem.cmake:6 (include)
-  CMakeLists.txt:1 (project)
-
-
--- The C compiler identification is GNU 16.1.0
--- The CXX compiler identification is GNU 16.1.0
--- Detecting C compiler ABI info
-CMake Deprecation Warning at D:/Code/koreader/base/thirdparty/cmake_modules/CMakeCross.cmake:8 (cmake_minimum_required):
-  Compatibility with CMake < 3.10 will be removed from a future version of
-  CMake.
-
-  Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
-  to tell CMake that the project requires at least <min> but has been updated
-  to work with policies introduced by <max> or earlier.
-Call Stack (most recent call first):
-  D:/Code/koreader/base/thirdparty/luajit/build/x86_64-w64-mingw32/CMakeFiles/4.3.4/CMakeSystem.cmake:6 (include)
-  D:/Code/koreader/base/thirdparty/luajit/build/x86_64-w64-mingw32/CMakeFiles/CMakeScratch/TryCompile-u5p13c/CMakeLists.txt:4 (project)
-
-
--- Detecting C compiler ABI info - done
--- Check for working C compiler: C:/msys64/mingw64/bin/x86_64-w64-mingw32-gcc.exe - skipped
--- Detecting C compile features
--- Detecting C compile features - done
--- Detecting CXX compiler ABI info
-CMake Deprecation Warning at D:/Code/koreader/base/thirdparty/cmake_modules/CMakeCross.cmake:8 (cmake_minimum_required):
-  Compatibility with CMake < 3.10 will be removed from a future version of
-  CMake.
-
-  Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
-  to tell CMake that the project requires at least <min> but has been updated
-  to work with policies introduced by <max> or earlier.
-Call Stack (most recent call first):
-  D:/Code/koreader/base/thirdparty/luajit/build/x86_64-w64-mingw32/CMakeFiles/4.3.4/CMakeSystem.cmake:6 (include)
-  D:/Code/koreader/base/thirdparty/luajit/build/x86_64-w64-mingw32/CMakeFiles/CMakeScratch/TryCompile-2qyhk0/CMakeLists.txt:4 (project)
-
-
--- Detecting CXX compiler ABI info - done
--- Check for working CXX compiler: C:/msys64/mingw64/bin/x86_64-w64-mingw32-g++.exe - skipped
--- Detecting CXX compile features
--- Detecting CXX compile features - done
-CMake Deprecation Warning at CMakeLists.txt:2 (cmake_minimum_required):
-  Compatibility with CMake < 3.10 will be removed from a future version of
-  CMake.
-
-  Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
-  to tell CMake that the project requires at least <min> but has been updated
-  to work with policies introduced by <max> or earlier.
-
-
--- Found Git: C:/msys64/usr/bin/git.exe (found version "2.54.0")
--- Configuring done (4.0s)
--- Generating done (0.0s)
--- Build files have been written to: D:/Code/koreader/base/thirdparty/luajit/build/x86_64-w64-mingw32
-make[1]: Entering directory '/d/Code/koreader/base/thirdparty/luajit/build/x86_64-w64-mingw32'
-[ 12%] Creating directories for 'luajit'
-[ 25%] Performing download step for 'luajit'
-Cloning into '/d/Code/koreader/base/thirdparty/luajit/build/git_checkout/luajit'...
-Updating files:  49% (114/232)Updating files:  50% (116/232)Updating files:  51% (119/232)Updating files:  52% (121/232)Updating files:  53% (123/232)Updating files:  54% (126/232)Updating files:  55% (128/232)Updating files:  56% (130/232)Updating files:  57% (133/232)Updating files:  58% (135/232)Updating files:  59% (137/232)Updating files:  60% (140/232)Updating files:  61% (142/232)Updating files:  62% (144/232)Updating files:  63% (147/232)Updating files:  64% (149/232)Updating files:  65% (151/232)Updating files:  66% (154/232)Updating files:  67% (156/232)Updating files:  68% (158/232)Updating files:  69% (161/232)Updating files:  70% (163/232)Updating files:  71% (165/232)Updating files:  72% (168/232)Updating files:  73% (170/232)Updating files:  74% (172/232)Updating files:  75% (174/232)Updating files:  76% (177/232)Updating files:  77% (179/232)Updating files:  78% (181/232)Updating files:  79% (184/232)Updating files:  80% (186/232)Updating files:  81% (188/232)Updating files:  82% (191/232)Updating files:  83% (193/232)Updating files:  84% (195/232)Updating files:  85% (198/232)Updating files:  86% (200/232)Updating files:  87% (202/232)Updating files:  88% (205/232)Updating files:  89% (207/232)Updating files:  90% (209/232)Updating files:  91% (212/232)Updating files:  92% (214/232)Updating files:  93% (216/232)Updating files:  94% (219/232)Updating files:  95% (221/232)Updating files:  96% (223/232)Updating files:  97% (226/232)Updating files:  98% (228/232)Updating files:  99% (230/232)Updating files: 100% (232/232)Updating files: 100% (232/232), done.
-fatal: unable to read tree (41fb94defa8f830ce69a8122b03f6ac3216d392a)
--- Fetching revision: '41fb94defa8f830ce69a8122b03f6ac3216d392a'
-From https://github.com/LuaJIT/LuaJIT
- * [new ref]         41fb94defa8f830ce69a8122b03f6ac3216d392a -> origin/41fb94defa8f830ce69a8122b03f6ac3216d392a
- * [new tag]         v2.0.ROLLING -> v2.0.ROLLING
- * [new tag]         v2.1.ROLLING -> v2.1.ROLLING
-Note: switching to '41fb94defa8f830ce69a8122b03f6ac3216d392a'.
-
-You are in 'detached HEAD' state. You can look around, make experimental
-changes and commit them, and you can discard any commits you make in this
-state without impacting any branches by switching back to a branch.
-
-If you want to create a new branch to retain commits you create, you may
-do so (now or later) by using -c with the switch command. Example:
-
-  git switch -c <new-branch-name>
-
-Or undo this operation with:
-
-  git switch -
-
-Turn off this advice by setting config variable advice.detachedHead to false
-
-HEAD is now at 41fb94d Add randomized register allocation for fuzz testing.
-[ 37%] No update step for 'luajit'
-[ 50%] Performing patch step for 'luajit'
-* Applying D:/Code/koreader/base/thirdparty/luajit/koreader-luajit-makefile-tweaks.patch . . .
-(Stripping trailing CRs from patch; use --binary to disable.)
-patching file src/Makefile
-Hunk #1 succeeded at 210 (offset -1 lines).
-Hunk #2 succeeded at 348 (offset -1 lines).
-Hunk #3 succeeded at 649 with fuzz 2 (offset 8 lines).
-Hunk #4 succeeded at 664 (offset 13 lines).
-Hunk #5 succeeded at 725 (offset 13 lines).
-* Applying D:/Code/koreader/base/thirdparty/luajit/koreader-luajit-enable-table_pack.patch . . .
-(Stripping trailing CRs from patch; use --binary to disable.)
-patching file src/lib_table.c
-[ 62%] No configure step for 'luajit'
-[ 75%] Performing build step for 'luajit'
-==== Building LuaJIT 2.1 (amalgamation) ====
-VERSION   luajit.h
-DYNASM    host/buildvm_arch.h
-HOSTCC    host/buildvm_asm.o
-HOSTCC    host/buildvm_peobj.o
-HOSTCC    host/buildvm_lib.o
-HOSTCC    host/buildvm_fold.o
-HOSTCC    host/buildvm.o
-CC        luajit.o
-HOSTLINK  host/buildvm.exe
-BUILDVM   lj_ffdef.h
-BUILDVM   lj_vm.o
-BUILDVM   lj_bcdef.h
-BUILDVM   lj_folddef.h
-BUILDVM   lj_recdef.h
-BUILDVM   lj_libdef.h
-BUILDVM   jit/vmdef.lua
-CC        ljamalg.o
-In file included from ljamalg.c:28:
-lj_str.c: In function 'lj_str_new':
-lj_str.c:320:11: warning: variable 'coll' set but not used [-Wunused-but-set-variable=]
-  320 |     MSize coll = 0;
-      |           ^~~~
-DYNLINK   lua51.dll
-LINK      luajit.exe
-OK        Successfully built LuaJIT
-==== Successfully built LuaJIT 2.1 (amalgamation) ====
-[ 87%] No install step for 'luajit'
-[100%] Completed 'luajit'
-[100%] Built target luajit
-make[1]: Leaving directory '/d/Code/koreader/base/thirdparty/luajit/build/x86_64-w64-mingw32'
-cp -fL /d/Code/koreader/base/thirdparty/luajit/build/x86_64-w64-mingw32/luajit-prefix/src/luajit/src/lua51.dll build/x86_64-w64-mingw32/lua51.dll
-cp -fL /d/Code/koreader/base/thirdparty/luajit/build/x86_64-w64-mingw32/luajit-prefix/src/luajit/src/luajit.exe build/x86_64-w64-mingw32/luajit.exe
-rm -rf build/x86_64-w64-mingw32/jit
-cp -r -fL /d/Code/koreader/base/thirdparty/luajit/build/x86_64-w64-mingw32/luajit-prefix/src/luajit/src/jit build/x86_64-w64-mingw32
-x86_64-w64-mingw32-gcc -L/d/Code/koreader/base/build/x86_64-w64-mingw32/libs -O2 -ffast-math -pipe -fomit-frame-pointer     -I/d/Code/koreader/base/thirdparty/luajit/build/x86_64-w64-mingw32/luajit-prefix/src/luajit/src -shared -O3 -ffast-math -pipe -fomit-frame-pointer -frename-registers -fweb -ftree-vectorize -funroll-loops -fvisibility=hidden -Wl,-O1 -Wl,--as-needed  -Wl,--allow-multiple-definition -static-libgcc -o build/x86_64-w64-mingw32/libs/libblitbuffer.dll blitbuffer.c
-# Avoid precision loss on 32-bit arches (LFS is always built w/ LARGEFILE support, but lua_Integer is always a ptrdiff_t, which is not wide enough).
-patch -d luafilesystem -t -N --no-backup-if-mismatch -r - -p1 < patches/lfs-pushnumber-for-wide-types.patch
-(Stripping trailing CRs from patch; use --binary to disable.)
-patching file src/lfs.c
-x86_64-w64-mingw32-gcc -L/d/Code/koreader/base/build/x86_64-w64-mingw32/libs -O2 -ffast-math -pipe -fomit-frame-pointer     -I/d/Code/koreader/base/thirdparty/luajit/build/x86_64-w64-mingw32/luajit-prefix/src/luajit/src -shared -Wl,-O1 -Wl,--as-needed  -Wl,--allow-multiple-definition -static-libgcc -o build/x86_64-w64-mingw32/libs/libkoreader-lfs.dll luafilesystem/src/lfs.c -l:lua51.dll
-C:/msys64/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/16.1.0/../../../../x86_64-w64-mingw32/bin/ld.exe: cannot find -l:lua51.dll: No such file or directory
-collect2.exe: error: ld returned 1 exit status
-make: *** [Makefile:116: build/x86_64-w64-mingw32/libs/libkoreader-lfs.dll] Error 1
