@@ -56,6 +56,20 @@ jobs:
           # The version string comes from `git describe`, which needs the tags.
           fetch-depth: 0
 
+      - name: Set up PATH
+        # An MSYS shell has /usr/bin but not /mingw64/bin on PATH — that is the
+        # MINGW64 shell's job. The build needs the MinGW toolchain reachable, and
+        # so do cmake and ninja, so export it for the remaining steps.
+        #
+        # `GITHUB_ENV` is a Windows path (`D:\a\_temp\...`), which MSYS will not
+        # accept for redirection as-is; convert it first.
+        run: |
+          env_file="$GITHUB_ENV"
+          case "$env_file" in
+            [A-Za-z]:*) env_file="$(cygpath -u "$env_file")" ;;
+          esac
+          echo "PATH=/usr/bin:/mingw64/bin:/usr/local/bin:/bin:$PATH" >> "$env_file"
+
       - name: Compiler version
         run: |
           x86_64-w64-mingw32-gcc --version | head -1
