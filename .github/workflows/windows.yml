@@ -56,7 +56,7 @@ jobs:
         # compiler probe fails with "missing and no known rule to make it".
         run: |
           pacman --noconfirm --needed --sync \
-            make git unzip zip tar bsdtar lzip cmake ninja \
+            make git unzip zip tar bsdtar lzip cmake ninja meson \
             mingw-w64-x86_64-gcc \
             mingw-w64-x86_64-binutils \
             mingw-w64-x86_64-crt \

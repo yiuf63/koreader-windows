@@ -16,7 +16,7 @@ MINGW64 one), the toolchain and the build tools:
 ```sh
 pacman -S --needed \
     make git unzip zip tar \
-    cmake ninja \
+    cmake ninja meson \
     mingw-w64-x86_64-toolchain \
     mingw-w64-x86_64-cmake \
     mingw-w64-x86_64-ninja \
