@@ -35,18 +35,24 @@ jobs:
         with:
           msystem: MSYS
           update: false
-          install: >-
-            make
-            git
-            unzip
-            zip
-            tar
-            bsdtar
-            lzip
-            mingw-w64-x86_64-toolchain
-            mingw-w64-x86_64-cmake
-            mingw-w64-x86_64-ninja
-            mingw-w64-x86_64-pkgconf
+          # Packages are installed in the next step instead: the action's
+          # `install:` runs pacman in a way whose output is not always captured,
+          # and when it fails the workflow only reports a missing compiler much
+          # later, with no sign of the real error.
+          install: ""
+
+      - name: Install build dependencies
+        run: |
+          pacman --noconfirm --needed --sync \
+            make git unzip zip tar bsdtar lzip \
+            mingw-w64-x86_64-gcc \
+            mingw-w64-x86_64-binutils \
+            mingw-w64-x86_64-crt \
+            mingw-w64-x86_64-headers \
+            mingw-w64-x86_64-libwinpthread \
+            mingw-w64-x86_64-cmake \
+            mingw-w64-x86_64-ninja \
+            mingw-w64-x86_64-pkgconf \
             mingw-w64-x86_64-nasm
 
       - name: Checkout
@@ -58,20 +64,21 @@ jobs:
 
       - name: Set up PATH
         # An MSYS shell has /usr/bin but not /mingw64/bin on PATH — that is the
-        # MINGW64 shell's job. The build needs the MinGW toolchain reachable, and
-        # so do cmake and ninja, so export it for the remaining steps.
+        # MINGW64 shell's job — while the build needs the MinGW toolchain (and
+        # cmake/ninja) reachable. `doc/Building_Windows.md` does this with
+        # `export PATH="/usr/bin:/mingw64/bin:$PATH"`.
         #
-        # `GITHUB_ENV` is a Windows path (`D:\a\_temp\...`), which MSYS will not
-        # accept for redirection as-is; convert it first.
+        # Adding it to GITHUB_PATH needs the *Windows* spelling: these
+        # environment files cross a cmd.exe boundary, and a Unix-style path
+        # written into them is not converted back on the way in.
         run: |
-          env_file="$GITHUB_ENV"
-          case "$env_file" in
-            [A-Za-z]:*) env_file="$(cygpath -u "$env_file")" ;;
-          esac
-          echo "PATH=/usr/bin:/mingw64/bin:/usr/local/bin:/bin:$PATH" >> "$env_file"
+          echo "$(cygpath -w /mingw64/bin)" >> "$GITHUB_PATH"
+          echo "$(cygpath -w /usr/bin)"   >> "$GITHUB_PATH"
 
       - name: Compiler version
         run: |
+          set -x
+          which x86_64-w64-mingw32-gcc
           x86_64-w64-mingw32-gcc --version | head -1
           cmake --version | head -1
           ninja --version
