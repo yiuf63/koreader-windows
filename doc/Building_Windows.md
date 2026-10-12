@@ -35,11 +35,17 @@ A few things are easy to get wrong here:
 
 ## Getting the source
 
+The Windows support is not upstream yet, so clone the fork — its `base`
+submodule already points at the matching `koreader-base` fork:
+
 ```sh
-git clone https://github.com/koreader/koreader.git
-cd koreader
+git clone --branch win32-port https://github.com/yiuf63/koreader-windows.git
+cd koreader-windows
 git submodule update --init --recursive
 ```
+
+To build on top of upstream instead, take the `win32: …` commits from that
+branch; nothing else is needed.
 
 ## Building
 
@@ -131,9 +137,48 @@ A few details are Windows-specific and worth knowing about when debugging:
 Configuration and caches live in `%APPDATA%\koreader`, not next to the
 executable. Set `KO_HOME` to override this.
 
+## Testing
+
+`./kodev test front` does not work for this target: the harness drives `busted`
+(which comes from luarocks and is only built for the emulator), and it runs the
+specs under `luajit`, which exports none of the POSIX shims `koreader.exe`
+provides — the frontend cannot even load there.
+
+```sh
+tools/win32/run_specs.sh
+```
+
+runs the suite one spec per process instead. That also contains the damage from
+the handful of specs that drive the real document and framebuffer stack and
+hard-crash the process: a crash costs one spec rather than the whole run.
+Results land in `%TEMP%\kospecs_all.txt`, with per-spec output alongside.
+
+Current state: 76 spec files, 596 assertions, 262 passing, 0 crashes. No
+remaining failure is Windows-specific; they are specs that need the emulator
+harness's fixtures (screen geometry, `spec/front/unit/data`) or parts of
+luassert the runner does not implement.
+
 ## Limitations
 
 - **Terminal plugin** — needs a Unix pseudoterminal (`/dev/ptmx`); ConPTY would
   be a different implementation. The plugin disables itself.
 - **Time sync plugin** — needs `ntpd`/`ntpdate` and a Unix privileged-clock
   model. The plugin disables itself.
+- **No `fork()`.** Document loading normally happens in a forked child so the UI
+  can report progress. Windows has no `fork`, so `ffi/util.lua` reports it as
+  unavailable and `ui/trapper.lua` runs the task inline. Loading a large
+  document therefore blocks the UI for the duration, and there is no progress
+  bar. `CreateProcess` is the obvious alternative, but the render path is not
+  re-entrant: it mutates `m_pages`, the style caches and conNode geometry, and
+  the draw path re-enters `partialRender`. Doing this properly needs a headless
+  entry point and a private cache directory (the global `cr3cache.inx` would
+  otherwise be shared) — it is not a drop-in swap.
+
+### A note on rendering threads
+
+crengine is built with `CR_USE_THREADS 0`, which makes every `LVLock` and
+`CRENGINE_GUARD` a no-op. On top of that, rendering mutates shared document
+state, so moving it to a thread would race with the UI thread's own draws rather
+than merely interleave with them. Enabling threads here means auditing
+crengine's locking, not just flipping a flag. Until then, rendering stays on the
+UI thread.

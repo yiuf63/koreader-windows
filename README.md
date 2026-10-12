@@ -2,6 +2,13 @@
 
 #### KOReader is a document viewer primarily aimed at e-ink readers.
 
+> **This branch adds a native Windows build.** `make TARGET=win32` produces a
+> `koreader.exe` that runs on Windows 10/11 with no MSYS2 or Cygwin installed —
+> no POSIX emulation layer. See [doc/Building_Windows.md](doc/Building_Windows.md),
+> or grab the packaged build from the [releases page](../../releases). The
+> changes are meant to follow upstream and are confined to the build system,
+> `base/`, and the platform-specific parts of the frontend.
+
 [![AGPL Licence][badge-license]](COPYING)
 [![Latest release][badge-release]][link-gh-releases]
 [![Gitter][badge-gitter]][link-gitter]
