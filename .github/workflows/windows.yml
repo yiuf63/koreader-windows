@@ -48,13 +48,15 @@ jobs:
           install: ""
 
       - name: Install build dependencies
-        # `cmake` (the MSYS package) as well as `mingw-w64-x86_64-cmake`: the
-        # build writes MSYS paths into koreader_vars.cmake, and only the MSYS
-        # cmake resolves those. With just the native one, CMAKE_MODULE_PATH ends
-        # up empty and every include() in the project fails.
+        # Both `cmake`/`ninja` (the MSYS packages) and their
+        # `mingw-w64-x86_64-` counterparts: the build writes MSYS paths into
+        # koreader_vars.cmake and into the compiler-probe scratch files, and only
+        # the MSYS builds resolve those. With just the native ones,
+        # CMAKE_MODULE_PATH ends up empty (every include() then fails) and the
+        # compiler probe fails with "missing and no known rule to make it".
         run: |
           pacman --noconfirm --needed --sync \
-            make git unzip zip tar bsdtar lzip cmake \
+            make git unzip zip tar bsdtar lzip cmake ninja \
             mingw-w64-x86_64-gcc \
             mingw-w64-x86_64-binutils \
             mingw-w64-x86_64-crt \
