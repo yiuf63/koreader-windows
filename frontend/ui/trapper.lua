@@ -548,31 +548,54 @@ function Trapper:dismissableRunInSubprocess(task, trap_widget_or_string, task_re
     local completed = false
     local ret_values
 
-    local pid, parent_read_fd = ffiutil.runInSubProcess(function(pid, child_write_fd)
-        local output_str = ""
+    -- Runs the task and returns what would otherwise be piped back from the
+    -- subprocess. Shared between the forked path and the synchronous fallback.
+    local function run_task()
         if task_returns_simple_string then
             -- task is assumed to return only a string or nil,
             -- so avoid a possibly expensive ser/deser roundtrip.
             local result = task()
             if type(result) == "string" then
-                output_str = result
+                return result
             elseif result ~= nil then
                 logger.warn("returned value from task is not a string:", result)
             end
-        else
-            -- task may return complex data structures, that we serialize.
-            -- NOTE: LuaJIT's serializer currently doesn't support:
-            --       functions, coroutines, non-numerical FFI cdata & full userdata.
-            local results = table.pack(task())
-            local ok, str = pcall(buffer.encode, results)
-            if not ok then
-                logger.warn("cannot serialize", tostring(results), "->", str)
-            else
-                output_str = str
-            end
+            return nil
         end
-        ffiutil.writeToFD(child_write_fd, output_str, true)
+        -- task may return complex data structures, that we serialize.
+        -- NOTE: LuaJIT's serializer currently doesn't support:
+        --       functions, coroutines, non-numerical FFI cdata & full userdata.
+        local results = table.pack(task())
+        local ok, str = pcall(buffer.encode, results)
+        if not ok then
+            logger.warn("cannot serialize", tostring(results), "->", str)
+            return nil
+        end
+        return str
+    end
+
+    local pid, parent_read_fd = ffiutil.runInSubProcess(function(pid, child_write_fd)
+        ffiutil.writeToFD(child_write_fd, run_task() or "", true)
     end, true) -- with_pipe = true
+
+    if not pid then
+        -- No `fork()` (Windows): run the task right here instead of returning
+        -- nothing. It is what every caller wants, just without the UI staying
+        -- responsive while it runs.
+        logger.dbg("cannot fork, running task synchronously")
+        local output_str = run_task()
+        if output_str then
+            if task_returns_simple_string then
+                return true, output_str
+            end
+            local ok, t = pcall(buffer.decode, output_str)
+            if ok and t then
+                return true, unpack(t, 1, t.n)
+            end
+            logger.warn("malformed serialized data:", t)
+        end
+        return true
+    end
 
     if pid then
         -- We check regularly if subprocess is done, and we give control
