@@ -74,16 +74,22 @@ jobs:
         # cmake/ninja) reachable. `doc/Building_Windows.md` does this with
         # `export PATH="/usr/bin:/mingw64/bin:$PATH"`.
         #
+        # The *order* matters and is not interchangeable: MSYS2 ships two cmake
+        # builds, and only the MSYS one understands MSYS paths like `/d/a/...`.
+        # The native one silently fails to resolve the paths the build writes
+        # into `koreader_vars.cmake`, so every `include()` in the project then
+        # fails with "could not find requested file" — an error that points at
+        # the includes rather than at cmake.
+        #
         # This goes into `GITHUB_ENV` rather than `GITHUB_PATH`: the latter is
-        # prepended to the *Windows* PATH, which the MSYS launcher translates on
-        # its own terms, and a Unix path written there does not survive the
-        # round trip. Setting PATH itself does.
+        # prepended to the *Windows* PATH, which the MSYS launcher then
+        # re-derives, so the ordering above would not be preserved.
         run: |
           env_file="$GITHUB_ENV"
           case "$env_file" in
             [A-Za-z]:*) env_file="$(cygpath -u "$env_file")" ;;
           esac
-          echo "PATH=/mingw64/bin:/usr/bin:/usr/local/bin:/bin:$PATH" >> "$env_file"
+          echo "PATH=/usr/bin:/mingw64/bin:/usr/local/bin:/bin:$PATH" >> "$env_file"
 
       - name: Compiler version
         run: |
