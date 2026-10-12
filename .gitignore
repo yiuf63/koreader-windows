@@ -48,6 +48,13 @@ koreader-*
 
 i18n
 
+# Test runs need the fixtures under `spec/front/unit/data`, which the emulator
+# harness links from `test/`; on the Windows build we create it by hand.
+/spec/front/
+
+# Local screenshots taken while checking the Windows build by hand.
+/screenshots-win32/
+
 /.cproject
 /.project
 .gitignore~
