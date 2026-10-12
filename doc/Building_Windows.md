@@ -16,6 +16,7 @@ MINGW64 one), the toolchain and the build tools:
 ```sh
 pacman -S --needed \
     make git unzip zip tar \
+    cmake \
     mingw-w64-x86_64-toolchain \
     mingw-w64-x86_64-cmake \
     mingw-w64-x86_64-ninja \
@@ -26,9 +27,13 @@ pacman -S --needed \
 
 A few things are easy to get wrong here:
 
-- **Use the MSYS shell, and make sure its `cmake`/`ninja` win the `PATH`
-  race.** Building from a MINGW64 shell picks up the wrong `cmake`, and the
-  build then fails while probing the compiler.
+- **Both cmake packages are needed, and the MSYS one has to win.** The build
+  writes MSYS paths (`/d/…`) into `koreader_vars.cmake`, and only the MSYS cmake
+  resolves those; the native `mingw-w64-x86_64-cmake` does not, so
+  `CMAKE_MODULE_PATH` ends up empty and every `include()` fails with "could not
+  find requested file" — an error that points at the includes rather than at
+  cmake. Hence the bare `cmake` (that is the MSYS package) *and*
+  `mingw-w64-x86_64-cmake`, with `/usr/bin` ahead of `/mingw64/bin` in `PATH`.
 - `bsdtar` (from `libarchive`) and `lzip` are needed to unpack some of the
   thirdparty archives; they are not part of the base install.
 - `nasm` is needed by libjpeg-turbo's SIMD code.

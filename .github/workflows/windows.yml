@@ -48,9 +48,13 @@ jobs:
           install: ""
 
       - name: Install build dependencies
+        # `cmake` (the MSYS package) as well as `mingw-w64-x86_64-cmake`: the
+        # build writes MSYS paths into koreader_vars.cmake, and only the MSYS
+        # cmake resolves those. With just the native one, CMAKE_MODULE_PATH ends
+        # up empty and every include() in the project fails.
         run: |
           pacman --noconfirm --needed --sync \
-            make git unzip zip tar bsdtar lzip \
+            make git unzip zip tar bsdtar lzip cmake \
             mingw-w64-x86_64-gcc \
             mingw-w64-x86_64-binutils \
             mingw-w64-x86_64-crt \
@@ -94,10 +98,10 @@ jobs:
       - name: Compiler version
         run: |
           set -x
-          which x86_64-w64-mingw32-gcc
-          x86_64-w64-mingw32-gcc --version | head -1
+          which cmake ninja make
           cmake --version | head -1
           ninja --version
+          x86_64-w64-mingw32-gcc --version | head -1
 
       - name: Build
         # `USE_NO_CCACHE=1`: the runner ships Strawberry Perl's ccache, which the
@@ -109,7 +113,14 @@ jobs:
         #
         # `-j4` rather than `-j$(nproc)`: crengine has translation units that
         # each peak near 1GB, and eight at once exhausts the runner.
-        run: make TARGET=win32 -j4 USE_NO_CCACHE=1
+        run: |
+          set -x
+          # The build writes MSYS paths into koreader_vars.cmake, so the MSYS
+          # cmake has to be the one that runs.
+          which cmake
+          make TARGET=win32 -j4 USE_NO_CCACHE=1
+          grep -m1 CMAKE_COMMAND:INTERNAL \
+            base/build/x86_64-w64-mingw32/cmake/CMakeCache.txt || true
 
       - name: Check binaries for missing dependencies
         # Not `make bincheck`: that target reasons about ELF sonames and looks
