@@ -720,8 +720,15 @@ function BookInfoManager:extractInBackground(files)
     -- Run task in sub-process, and remember its pid
     local task_pid = FFIUtil.runInSubProcess(task)
     if not task_pid then
-        logger.warn("Failed launching background extraction sub-process (fork failed)")
-        return false -- let caller know it failed
+        -- No `fork()` on this platform (Windows). The work itself is perfectly
+        -- doable, just not in the background: run it here, and report success
+        -- so callers do not show their "could not start the job" warning and
+        -- give up. The cost is that the UI is blocked for the duration, which
+        -- is noticeable for a large directory but far better than not
+        -- extracting at all.
+        logger.dbg("no fork(); extracting book info synchronously")
+        task()
+        return true
     end
     -- No straight control flow exists for background task completion here, so we bump prevent
     -- counter on each task, and undo that inside collectSubprocesses() zombie reaper.
