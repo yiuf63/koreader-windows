@@ -58,8 +58,15 @@ branch; nothing else is needed.
 ```sh
 export PATH="/usr/bin:/mingw64/bin:$PATH"
 export MSYSTEM=MSYS
-make TARGET=win32 -j"$(nproc)"
+make TARGET=win32 -j4
 ```
+
+Use a modest `-j`: crengine has a few translation units that each peak near
+1 GB, and building all of them at once exhausts the memory of a 16 GB machine —
+the compiler dies with `cc1plus.exe: out of memory allocating …`, which reads as
+a mysterious build failure rather than an out-of-memory one. It also surfaces
+late: the failure lands on whichever large file happens to be compiled when the
+memory runs out, not on a fixed one.
 
 The first build takes a while: it compiles LuaJIT, MuPDF, crengine, DjVuLibre
 and ~30 other libraries.
