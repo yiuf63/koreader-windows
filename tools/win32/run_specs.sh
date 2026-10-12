@@ -22,10 +22,18 @@ set -u
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 KD="${1:-$ROOT/koreader-win32-x86_64-w64-mingw32/koreader}"
-PATCHDIR="${APPDATA:-$HOME/AppData/Roaming}/koreader/patches"
 TMP="${TEMP:-/tmp}"
 DETAIL="$TMP/kospecs_detail"
 OUT="$TMP/kospecs_all.txt"
+
+# Keep the run self-contained. `KO_HOME` sets the data directory outright (it
+# takes priority over APPDATA in datastorage.lua) and the patch directory lives
+# inside it, so nothing here touches a real profile.
+SCRATCH="${TMPDIR:-/tmp}/ko-specs"
+export KO_HOME
+KO_HOME="$(cygpath -w "$SCRATCH/home" 2>/dev/null || echo "$SCRATCH/home")"
+SCRATCH_U="${SCRATCH}/home"
+PATCHDIR="$SCRATCH_U/patches"
 
 if [ ! -x "$KD/koreader.exe" ]; then
     echo "error: no koreader.exe in $KD" >&2
@@ -33,9 +41,16 @@ if [ ! -x "$KD/koreader.exe" ]; then
     exit 1
 fi
 
-rm -rf "$DETAIL"; mkdir -p "$DETAIL"
-mkdir -p "$PATCHDIR"
-rm -f "$PATCHDIR"/*.lua
+# Several specs open example documents through `spec/front/unit/data`, which the
+# emulator harness links from `test/`; there is no such step for this target.
+if [ ! -d "$ROOT/spec/front/unit/data" ]; then
+    mkdir -p "$ROOT/spec/front/unit"
+    ln -sfn ../../../test "$ROOT/spec/front/unit/data" 2>/dev/null \
+        || cp -r "$ROOT/test" "$ROOT/spec/front/unit/data"
+fi
+
+rm -rf "$SCRATCH_U" "$DETAIL"
+mkdir -p "$DETAIL" "$PATCHDIR"
 cp -f "$ROOT/tools/win32/spec_runner.lua" "$PATCHDIR/2-spec-runner.lua"
 
 : > "$OUT"
@@ -89,3 +104,32 @@ done
 } >> "$OUT"
 
 cat "$OUT"
+
+# Exit status.
+#
+# Not "all specs pass": many need the emulator harness (screen geometry, the
+# framebuffer) or parts of luassert this runner does not implement, so a
+# zero-failure run is not the bar here. What must not happen is the suite
+# collapsing — a build that cannot even load the frontend, or a change that
+# breaks whole groups of specs.
+#
+#   MIN_PASS  floor on passing assertions (262 at the time of writing)
+#   MAX_CRASH specs that crash or hang the process (0 at the time of writing)
+MIN_PASS="${MIN_PASS:-250}"
+MAX_CRASH="${MAX_CRASH:-5}"
+
+crashes=$(echo "$crash_list" | tr ' ' '\n' | grep -c .)
+
+if [ "$pass_total" -lt "$MIN_PASS" ]; then
+    echo "" >&2
+    echo "FAILED: only $pass_total assertions passed (expected at least $MIN_PASS)" >&2
+    exit 1
+fi
+
+if [ "$crashes" -gt "$MAX_CRASH" ]; then
+    echo "" >&2
+    echo "FAILED: $crashes spec(s) crashed or timed out (allowed: $MAX_CRASH)" >&2
+    exit 1
+fi
+
+exit 0

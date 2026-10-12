@@ -1,0 +1,93 @@
+name: windows
+
+# Builds and smoke-tests the native Windows target (`TARGET=win32`).
+#
+# This replaces upstream's `build.yml`, which builds macOS: that is the wrong
+# platform for this branch and cannot be made to mean anything here (and it
+# failed outright, because the base submodule is the fork rather than upstream).
+#
+# The build is a plain MSYS2/MinGW-w64 one, exactly as documented in
+# doc/Building_Windows.md, so a green run here means the documented steps work
+# from a clean checkout.
+
+on: [push, pull_request, workflow_dispatch]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    # Everything runs in the MSYS shell: the build needs MSYS's own make/cmake/
+    # ninja to win the PATH race (see doc/Building_Windows.md).
+    shell: msys2 {0}
+
+jobs:
+
+  build:
+
+    runs-on: windows-latest
+
+    steps:
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MSYS
+          update: false
+          install: >-
+            make
+            git
+            unzip
+            zip
+            tar
+            bsdtar
+            lzip
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-nasm
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          # The version string comes from `git describe`, which needs the tags.
+          fetch-depth: 0
+
+      - name: Compiler version
+        run: |
+          x86_64-w64-mingw32-gcc --version | head -1
+          cmake --version | head -1
+          ninja --version
+
+      - name: Build
+        # -j4 rather than -j$(nproc): crengine has a few translation units that
+        # each peak near 1GB, and eight at once exhausts the runner.
+        run: make TARGET=win32 -j4
+
+      - name: Check binaries for missing dependencies
+        # Not `make bincheck`: that target reasons about ELF sonames and looks
+        # for libc.so.6. PE records dependencies by literal file name instead.
+        run: tools/win32/check_dlls.sh
+
+      - name: Smoke test
+        # Exercises the POSIX shim, the DLL search path and the Lua side. A
+        # failure here is the class of bug that only shows up at runtime: a
+        # missing `open`/`read`, an unresolvable import, a bad search path.
+        run: tools/win32/ci_smoke.sh
+
+      - name: Run spec suite
+        run: tools/win32/run_specs.sh
+
+      - name: Package
+        run: make TARGET=win32 update-zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: koreader-win32
+          path: koreader-win32-*.zip
+          # The zip is ~200MB, mostly CJK fonts and the OCR libraries.
+          compression-level: 0
