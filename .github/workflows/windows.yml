@@ -35,6 +35,12 @@ jobs:
         with:
           msystem: MSYS
           update: false
+          # The default `path-type: strict` *replaces* PATH inside the MSYS
+          # shell with MSYS2's own, which discards anything added through
+          # GITHUB_PATH — leaving /mingw64/bin unreachable and the compiler
+          # "not found". `inherit` keeps the converted Windows PATH, so the
+          # additions below take effect.
+          path-type: inherit
           # Packages are installed in the next step instead: the action's
           # `install:` runs pacman in a way whose output is not always captured,
           # and when it fails the workflow only reports a missing compiler much
@@ -68,12 +74,16 @@ jobs:
         # cmake/ninja) reachable. `doc/Building_Windows.md` does this with
         # `export PATH="/usr/bin:/mingw64/bin:$PATH"`.
         #
-        # Adding it to GITHUB_PATH needs the *Windows* spelling: these
-        # environment files cross a cmd.exe boundary, and a Unix-style path
-        # written into them is not converted back on the way in.
+        # This goes into `GITHUB_ENV` rather than `GITHUB_PATH`: the latter is
+        # prepended to the *Windows* PATH, which the MSYS launcher translates on
+        # its own terms, and a Unix path written there does not survive the
+        # round trip. Setting PATH itself does.
         run: |
-          echo "$(cygpath -w /mingw64/bin)" >> "$GITHUB_PATH"
-          echo "$(cygpath -w /usr/bin)"   >> "$GITHUB_PATH"
+          env_file="$GITHUB_ENV"
+          case "$env_file" in
+            [A-Za-z]:*) env_file="$(cygpath -u "$env_file")" ;;
+          esac
+          echo "PATH=/mingw64/bin:/usr/bin:/usr/local/bin:/bin:$PATH" >> "$env_file"
 
       - name: Compiler version
         run: |
