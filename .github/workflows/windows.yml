@@ -94,9 +94,16 @@ jobs:
           ninja --version
 
       - name: Build
-        # -j4 rather than -j$(nproc): crengine has a few translation units that
+        # `USE_NO_CCACHE=1`: the runner ships Strawberry Perl's ccache, which the
+        # build picks up via `command -v ccache`. Its path is a Windows one
+        # (`C:\Strawberry\c\bin\ccache`), and passing that through the MSYS shell
+        # to ninja mangles it into `\c\Strawberry\c\bin\ccache`, which fails the
+        # compiler probe with "CreateProcess failed: The system cannot find the
+        # file specified." There is no ccache here to benefit from anyway.
+        #
+        # `-j4` rather than `-j$(nproc)`: crengine has translation units that
         # each peak near 1GB, and eight at once exhausts the runner.
-        run: make TARGET=win32 -j4
+        run: make TARGET=win32 -j4 USE_NO_CCACHE=1
 
       - name: Check binaries for missing dependencies
         # Not `make bincheck`: that target reasons about ELF sonames and looks
