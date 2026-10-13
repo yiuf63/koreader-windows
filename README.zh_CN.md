@@ -113,9 +113,11 @@ luarocks，只为模拟器构建），而且它用 `luajit` 跑测试 —— 而
 `koreader.exe` 提供的那些 POSIX 兼容符号。改用：
 
 ```sh
-tools/win32/run_specs.sh     # 前端测试套件，每个 spec 独立进程
-tools/win32/ci_smoke.sh      # 运行时冒烟测试（POSIX shim、DLL、gettext）
-tools/win32/check_dlls.sh    # 检查所有 DLL 的依赖是否可解析
+tools/win32/run_specs.sh              # 前端测试套件，每个 spec 独立进程
+tools/win32/ci_smoke.sh               # 运行时冒烟测试（POSIX shim、DLL、gettext）
+tools/win32/check_dlls.sh             # 检查所有 DLL 的依赖是否可解析
+tools/win32/check_single_copies.sh    # 没有库被重复打包，且所有依赖可解析
+tools/win32/report_duplicate_libs.sh  # 若上一条查到重复，用它说明情况
 ```
 
 套件之所以每个 spec 一个进程，是因为有几个 spec 会驱动真实的文档/帧缓冲栈
@@ -146,7 +148,7 @@ tools/win32/check_dlls.sh    # 检查所有 DLL 的依赖是否可解析
 - **DLL 搜索路径。** PE 没有 soname 机制（不同于 ELF 和 Mach-O）：DLL 用
   字面文件名记录依赖，加载器只从可执行文件所在目录和搜索路径里找。因此
   `win_loader.c` 用 `AddDllDirectory` 注册了 `libs/` 和 `common/`。没有这一步，
-  `libarchive-13.dll` 找不到就在它旁边的 `libz.dll`。
+  `libarchive-13.dll` 找不到就在它旁边的 `libz-1.dll`。
 
 - **POSIX 符号。** MSVCRT 只导出带下划线前缀的拼写（`_open` 而非 `open`），
   而 Lua 代码调用的是 POSIX 名字。`ffi.C` 是对进程映像及其导入表解析符号的，
@@ -155,9 +157,19 @@ tools/win32/check_dlls.sh    # 检查所有 DLL 的依赖是否可解析
   文件，会把 CRLF 改写掉并悄悄缩短读取 —— 这正是翻译目录（`.mo`，二进制）
   加载失败的原因。
 
-- **DLL 命名。** `libs/` 里多数库有两个名字 —— `ffi/loadlib.lua` 要的规范名
-  `lib<name>-<version>.dll`，以及其他 DLL 导入时用的原始拼写。两者是同一个
-  文件（硬链接）。见 `base/thirdparty/cmake_modules/install_lib.sh`。
+- **DLL 命名。** 每个库只安装一份，用 `ffi/loadlib.lua` 要的规范名
+  `lib<name>-<version>.dll`。因为 PE 按字面文件名解析导入，若某个依赖方记录了
+  项目自己的拼写，加载时就会失败，所以导入档案（import archive）会在任何库链接
+  它之前被改写成规范名：`base/thirdparty/cmake_modules/record_canonical_implib.sh`。
+  有两个项目会链接自己产出的库，因此改为直接产出规范名 —— libwebp 用
+  `CMAKE_SHARED_LIBRARY_NAME_WITH_VERSION`，tesseract 用 `OUTPUT_NAME`。
+  此前两个名字都打包，在压缩包里代价是 137 MB —— 因为 zip 存不了硬链接，
+  而正是硬链接让这件事在构建树里不花空间。
+
+  新增库时注意两点。`CMAKE_SHARED_LIBRARY_NAME_WITH_VERSION` 在 Windows 上
+  默认关闭，所以设了 `SOVERSION` 的项目产出的仍是不带版本的名字。另外，导入档案
+  会被它自己项目的链接步骤*重新生成*，所以在错误时机做的改写会被悄悄覆盖；
+  `tools/win32/check_single_copies.sh` 两种情况都能查到。
 
 - **符号链接。** 除非另有指定，MSYS2 会把 `ln -s` 退化成*复制*，所以
   `base/Makefile.defs` 设了 `MSYS=winsymlinks:nativestrict`。没有它，构建树会

@@ -122,9 +122,11 @@ specs under `luajit`, which exports none of the POSIX shims `koreader.exe`
 provides. Use instead:
 
 ```sh
-tools/win32/run_specs.sh     # the frontend spec suite, one spec per process
-tools/win32/ci_smoke.sh      # runtime smoke test (POSIX shim, DLLs, gettext)
-tools/win32/check_dlls.sh    # every DLL's imports resolve
+tools/win32/run_specs.sh              # the frontend spec suite, one spec per process
+tools/win32/ci_smoke.sh               # runtime smoke test (POSIX shim, DLLs, gettext)
+tools/win32/check_dlls.sh             # every DLL's imports resolve
+tools/win32/check_single_copies.sh    # no library ships twice, all imports resolve
+tools/win32/report_duplicate_libs.sh  # explain any duplicate the check finds
 ```
 
 The suite runs one spec per process because a few specs drive the real document
@@ -159,7 +161,7 @@ Windows-specific details worth knowing:
   records its dependencies by literal file name, and the loader resolves those
   from the executable's directory and the search path. `win_loader.c` therefore
   registers `libs/` and `common/` via `AddDllDirectory`. Without it,
-  `libarchive-13.dll` cannot find the `libz.dll` sitting next to it.
+  `libarchive-13.dll` cannot find the `libz-1.dll` sitting next to it.
 
 - **POSIX symbols.** MSVCRT exports only the underscore-prefixed spellings
   (`_open`, not `open`), while the Lua code calls the POSIX ones. `ffi.C`
@@ -169,10 +171,23 @@ Windows-specific details worth knowing:
   *text* mode by default, which rewrites CRLF and silently shortens reads — that
   is what stopped translation catalogues (`.mo`, binary) from loading.
 
-- **DLL naming.** `libs/` holds two names for most libraries — the canonical
-  `lib<name>-<version>.dll` that `ffi/loadlib.lua` asks for, and the original
-  spelling that other DLLs import. They are the same file (a hard link). See
-  `base/thirdparty/cmake_modules/install_lib.sh`.
+- **DLL naming.** Every library is installed once, under the canonical
+  `lib<name>-<version>.dll` that `ffi/loadlib.lua` asks for. Because PE resolves
+  imports by literal file name, a dependent that recorded a producer's own
+  spelling would fail to load, so the import archives are rewritten to the
+  canonical name before anything links against them:
+  `base/thirdparty/cmake_modules/record_canonical_implib.sh`. Two projects link
+  their own libraries and so emit the canonical name directly instead — libwebp
+  through `CMAKE_SHARED_LIBRARY_NAME_WITH_VERSION`, tesseract through
+  `OUTPUT_NAME`. Shipping both names, as this used to do, cost 137 MB in the
+  archive because a zip cannot store the hard links that made it free in the
+  build tree.
+
+  Two things to watch when adding a library. `CMAKE_SHARED_LIBRARY_NAME_WITH_VERSION`
+  is off on Windows by default, so a project that sets `SOVERSION` still produces
+  an unversioned name. And an import archive is *regenerated* by its own project's
+  link step, so a rewrite done at the wrong moment is silently undone;
+  `tools/win32/check_single_copies.sh` catches both cases.
 
 - **Symlinks.** MSYS2 emulates `ln -s` by *copying* unless told otherwise, so
   `base/Makefile.defs` sets `MSYS=winsymlinks:nativestrict`. Without it the
