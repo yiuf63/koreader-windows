@@ -129,6 +129,22 @@ jobs:
         # for libc.so.6. PE records dependencies by literal file name instead.
         run: tools/win32/check_dlls.sh
 
+      - name: Check that each library ships once
+        # Guards the duplication fix, and is checked on the build tree rather
+        # than only the zip so a regression is reported before packaging.
+        #
+        # 15 libraries used to ship twice (137 MB, libtesseract alone 107 MB)
+        # because `ffi/loadlib.lua` wants `lib<name>-<version>.dll` while a
+        # DLL's own import table records the producer's spelling. Both are now
+        # the canonical name, so one file each is enough.
+        #
+        # Two ways to undo that, neither of which fails at build time: link a
+        # library against a producer's spelling and the second copy returns;
+        # relink a dependent before its import archive is rewritten and its
+        # import names a file that is not shipped, which fails only at load
+        # time on a user's machine.
+        run: tools/win32/check_single_copies.sh
+
       - name: Smoke test
         # Exercises the POSIX shim, the DLL search path and the Lua side. A
         # failure here is the class of bug that only shows up at runtime: a
@@ -158,6 +174,11 @@ jobs:
 
           # The fixes that have to survive packaging, and the delivery details.
           tools/win32/check_package.sh /tmp/ko-artifact-check/koreader
+
+          # The zip is what carries the duplication into a release, so the
+          # single-copy invariant is checked on the artifact itself rather than
+          # trusting the build tree to have been packed faithfully.
+          tools/win32/check_single_copies.sh /tmp/ko-artifact-check/koreader
 
           # And that it starts the way a user starts it: no console on the
           # parent process and no POSIX environment. Both matter — the startup
