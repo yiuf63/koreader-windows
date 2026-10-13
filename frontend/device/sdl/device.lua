@@ -81,7 +81,19 @@ local external = require("device/thirdparty"):new{
 local Device = Generic:extend{
     model = "SDL",
     isSDL = yes,
-    home_dir = os.getenv("XDG_DOCUMENTS_DIR") or os.getenv("HOME"),
+    -- The user's home directory, used to locate per-user data (fonts, and the
+    -- XDG document directory).
+    --
+    -- Windows has neither `XDG_DOCUMENTS_DIR` nor `HOME`: `HOME` exists only in
+    -- a POSIX shell, so a build started from Explorer had a nil `home_dir`, and
+    -- anything concatenating it failed — `font_settings.lua` did, which aborted
+    -- startup with "attempt to concatenate local 'home' (a nil value)".
+    -- `USERPROFILE` is the Windows equivalent (and `HOMEDRIVE`+`HOMEPATH` the
+    -- older spelling, for completeness).
+    home_dir = os.getenv("XDG_DOCUMENTS_DIR") or os.getenv("HOME")
+        or (jit.os == "Windows" and (os.getenv("USERPROFILE")
+            or (os.getenv("HOMEDRIVE") and os.getenv("HOMEPATH")
+                and (os.getenv("HOMEDRIVE") .. os.getenv("HOMEPATH"))))),
     hasBattery = SDL.getPowerInfo,
     hasKeyboard = yes,
     hasKeys = yes,

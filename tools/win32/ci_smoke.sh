@@ -31,9 +31,20 @@ rm -f "$RESULT"
 
 (
     cd "$KD"
-    # The launcher is a GUI binary: it returns immediately, so wait for the
-    # patch to finish rather than for the process to exit.
-    KO_HOME="$(cygpath -w "$SCRATCH/home")" \
+    # Unset the POSIX environment a double-click would not have.
+    #
+    # This matters more than it looks. Running from bash inherits `HOME`, and the
+    # SDL device derives `Device.home_dir` from it — so a launch from a shell has
+    # a home directory while a launch from Explorer does not. That difference
+    # hid a startup abort for an entire release: `font_settings.lua` concatenated
+    # the nil `home_dir` and killed the process before the UI appeared, and every
+    # test here passed because they all ran from bash. Starting the process the
+    # way a user does is the point of the exercise, so the variables go away.
+    #
+    # KO_HOME still applies (and takes priority over APPDATA in datastorage.lua),
+    # so the run stays self-contained.
+    env -u HOME -u XDG_DATA_HOME -u XDG_DOCUMENTS_DIR \
+        KO_HOME="$(cygpath -w "$SCRATCH/home")" \
         ./koreader.exe >"$SCRATCH/out.txt" 2>&1 &
     pid=$!
 

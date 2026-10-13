@@ -105,6 +105,42 @@ do
     end
 end
 
+-- --------------------------------------------------------------- home 目录
+w("")
+w("home directory")
+do
+    -- A nil `home_dir` aborted startup outright for a whole release:
+    -- `font_settings.lua` concatenated it, and the resulting error killed the
+    -- process before the UI appeared. It went unnoticed because it only happens
+    -- when `HOME` is unset — that is, on a double-click, not when launched from
+    -- a shell, which is how every test here used to run. `ci_smoke.sh` now
+    -- unsets `HOME` for exactly this reason, so this check sees what a user
+    -- would.
+    local Device = require("device")
+    local home = Device.home_dir
+    check("Device.home_dir is set (no HOME in the environment)",
+        home ~= nil and home ~= "", tostring(home))
+    if home then
+        w("        home_dir -> " .. tostring(home))
+    end
+
+    -- The module that crashed, loaded the way the file manager loads it.
+    local ok, fs = pcall(require, "ui/elements/font_settings")
+    check("require ui/elements/font_settings", ok,
+        ok and nil or tostring(fs):sub(1, 100))
+    if ok then
+        -- getPath() calls getDir(true) and getDir(), so it evaluates both the
+        -- user and the system branch — the user one being where a nil `home`
+        -- used to be concatenated.
+        local ok2, path = pcall(function() return fs:getPath() end)
+        check("font_settings:getPath()", ok2,
+            ok2 and nil or tostring(path):sub(1, 100))
+        if ok2 then
+            w("        getPath() -> " .. tostring(path))
+        end
+    end
+end
+
 w("")
 if failures == 0 then
     w("SMOKE OK")

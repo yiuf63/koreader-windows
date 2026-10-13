@@ -9,11 +9,19 @@ local function getDir(isUser)
     local home = Device.home_dir
 
     local XDG_DATA_HOME = os.getenv("XDG_DATA_HOME")
+    -- `home` is nil when the device has no home directory (a Windows build
+    -- started from Explorer, where `HOME` is not set), so this cannot be
+    -- concatenated unconditionally: doing so raised
+    --   attempt to concatenate local 'home' (a nil value)
+    -- from here, before the guard below could return.
     local LINUX_FONT_PATH = XDG_DATA_HOME and XDG_DATA_HOME .. "/fonts"
-                                           or home .. "/.local/share/fonts"
+                            or (home and home .. "/.local/share/fonts")
     local LINUX_SYS_FONT_PATH = "/usr/share/fonts"
     local MACOS_FONT_PATH = "Library/fonts"
 
+    -- Only the Linux/macOS desktop branches below need `home`; the others use
+    -- absolute paths. Return early when it is missing and the caller asked for
+    -- the user directory, and fall through to the system directory otherwise.
     if isUser and not home then return end
 
     if Device:isAndroid() then
@@ -30,9 +38,15 @@ local function getDir(isUser)
             return isUser and home .. "/" .. MACOS_FONT_PATH
                            or "/" .. MACOS_FONT_PATH
         elseif jit.os == "Windows" then
-            local WINDOWS_FONT_PATH = home .. "/AppData/Local/Microsoft/Windows/Fonts"
             local WINDOWS_SYS_FONT_PATH = "C:/Windows/Fonts"
-            return isUser and WINDOWS_FONT_PATH or WINDOWS_SYS_FONT_PATH
+            -- The per-user font directory lives under the home directory, so it
+            -- is only defined when there is one. Without this, `isUser` on a
+            -- device with no home directory raised the same concatenation error
+            -- as above.
+            if isUser then
+                return home and (home .. "/AppData/Local/Microsoft/Windows/Fonts")
+            end
+            return WINDOWS_SYS_FONT_PATH
         else
             return isUser and LINUX_FONT_PATH
                            or LINUX_SYS_FONT_PATH
