@@ -141,6 +141,30 @@ jobs:
       - name: Package
         run: make TARGET=win32 update-zip
 
+      - name: Verify the packaged artifact
+        # Test the *packaged* build, not the build tree.
+        #
+        # Everything above runs against the tree the build produced, where the
+        # sources are symlinks into the checkout and the binaries are unstripped.
+        # The zip is what users actually get, and it is a different thing: real
+        # copies rather than symlinks, a release configuration, and a different
+        # directory layout. A release once went out broken while every check here
+        # passed, so the artifact itself is now checked.
+        run: |
+          set -eux
+          rm -rf /tmp/ko-artifact-check
+          mkdir -p /tmp/ko-artifact-check
+          unzip -q koreader-win32-*.zip -d /tmp/ko-artifact-check
+
+          # The fixes that have to survive packaging, and the delivery details.
+          tools/win32/check_package.sh /tmp/ko-artifact-check/koreader
+
+          # And that it starts the way a user starts it: no console on the
+          # parent process and no POSIX environment. Both matter — the startup
+          # abort in win32.2 only happened under those conditions, and running
+          # from this shell would inherit HOME and hide it.
+          tools/win32/ci_smoke.sh /tmp/ko-artifact-check/koreader
+
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
