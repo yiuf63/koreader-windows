@@ -151,6 +151,14 @@ jobs:
         # missing `open`/`read`, an unresolvable import, a bad search path.
         run: tools/win32/ci_smoke.sh
 
+      - name: Load and call into every FFI library
+        # The spec suite cannot see the import tables, and the single-copy check
+        # reads them without loading anything. This is the one that actually
+        # loads each library through the frontend's own wrappers and calls into
+        # them, so a library that loads but is missing symbols is caught here
+        # rather than as a nil call somewhere in the reader.
+        run: tools/win32/check_ffi_libs.sh
+
       - name: Run spec suite
         run: tools/win32/run_specs.sh
 
