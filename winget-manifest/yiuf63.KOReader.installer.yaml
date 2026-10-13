@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
 
 PackageIdentifier: yiuf63.KOReader
-PackageVersion: 2026.10-win32.3
+PackageVersion: 2026.10-win32.4
 InstallerType: zip
 NestedInstallerType: portable
 NestedInstallerFiles:
@@ -11,14 +11,14 @@ NestedInstallerFiles:
   - RelativeFilePath: koreader\koreader.exe
     PortableCommandAlias: koreader
 # The application resolves `libs/` and `common/` relative to its working
-# directory — 51 DLLs plus the Lua sources. Winget's default is to symlink the
+# directory — the libraries and the Lua sources. Winget's default is to symlink the
 # executable into `WinGet\Links`, which would start it from the wrong directory
 # and leave it unable to find its own libraries.
 ArchiveBinariesDependOnPath: true
-ReleaseDate: 2026-10-13
+ReleaseDate: 2026-10-14
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/yiuf63/koreader-windows/releases/download/v2026.10-win32.3/koreader-win32-x86_64-v2026.10-win32.3_2026-10-13.zip
-    InstallerSha256: 535C1DB51C2CDF74E3446E75123B2C44F0F01B6A19022C54852DF08841F02162
+    InstallerUrl: https://github.com/yiuf63/koreader-windows/releases/download/v2026.10-win32.4/koreader-win32-x86_64-v2026.10-win32.4_2026-10-14.zip
+    InstallerSha256: 2BB2365E26F25D10A64E7DD4D4BFD44B168AD49399BF5CAAE884FCE64A53E17C
 ManifestType: installer
 ManifestVersion: 1.12.0

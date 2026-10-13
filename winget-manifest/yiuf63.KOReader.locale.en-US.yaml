@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
 
 PackageIdentifier: yiuf63.KOReader
-PackageVersion: 2026.10-win32.3
+PackageVersion: 2026.10-win32.4
 PackageLocale: en-US
 Publisher: yiuf63
 PublisherUrl: https://github.com/yiuf63
@@ -35,6 +35,6 @@ Tags:
   - cbz
   - reader
   - document-viewer
-ReleaseNotesUrl: https://github.com/yiuf63/koreader-windows/releases/tag/v2026.10-win32.3
+ReleaseNotesUrl: https://github.com/yiuf63/koreader-windows/releases/tag/v2026.10-win32.4
 ManifestType: defaultLocale
 ManifestVersion: 1.12.0
