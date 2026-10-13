@@ -10,6 +10,16 @@
 # Matches `OUTPUT_DIR` in base/Makefile.defs (which adds `-debug` when KODEBUG).
 WIN32_BUILD_DIR = $(KOR_BASE)/build/$(MACHINE)
 
+# The architecture, for the package name — the CPU field of the target triplet,
+# which is how `linux.mk` names its packages too (`koreader-linux-x86_64…`).
+#
+# The full triplet is `x86_64-w64-mingw32`, and its trailing `mingw32` is *not* a
+# word size: it names the target API (Win32), which both the 32-bit and 64-bit
+# MinGW-w64 toolchains use — `i686-w64-mingw32` is the 32-bit one. Only the first
+# field says anything about the architecture, so that is the part worth keeping;
+# spelling out the whole triplet invited reading a 64-bit build as 32-bit.
+WIN32_ARCH = $(word 1,$(subst -, ,$(TARGET_MACHINE)))
+
 # Run. {{{
 PHONY += run
 
@@ -26,7 +36,7 @@ run: all
 # }}}
 
 # Update/package. {{{
-WIN32_PACKAGE = koreader-win32-$(TARGET_MACHINE)$(KODEDUG_SUFFIX)-$(VERSION).zip
+WIN32_PACKAGE = koreader-win32-$(WIN32_ARCH)$(KODEDUG_SUFFIX)-$(VERSION).zip
 
 update: update-zip
 
