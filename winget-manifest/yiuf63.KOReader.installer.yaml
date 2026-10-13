@@ -1,12 +1,12 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
 
 PackageIdentifier: yiuf63.KOReader
-PackageVersion: 2026.10-win32.2
+PackageVersion: 2026.10-win32.3
 InstallerType: zip
 NestedInstallerType: portable
 NestedInstallerFiles:
   # The archive's only top-level component is `koreader/`; verified by listing
-  # the 1,176 entries rather than assuming the release asset's name reflects the
+  # the entries rather than assuming the release asset's name reflects the
   # layout. Backslashes are required here.
   - RelativeFilePath: koreader\koreader.exe
     PortableCommandAlias: koreader
@@ -18,7 +18,7 @@ ArchiveBinariesDependOnPath: true
 ReleaseDate: 2026-10-13
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/yiuf63/koreader-windows/releases/download/v2026.10-win32.2/koreader-win32-x86_64-w64-mingw32-v2026.10-win32.2_2026-10-13.zip
-    InstallerSha256: 9232D22CDBA0D9F736FB03C6FE67AF46C7BF569D1BC4A9FB18922FA034C7D0BA
+    InstallerUrl: https://github.com/yiuf63/koreader-windows/releases/download/v2026.10-win32.3/koreader-win32-x86_64-v2026.10-win32.3_2026-10-13.zip
+    InstallerSha256: 535C1DB51C2CDF74E3446E75123B2C44F0F01B6A19022C54852DF08841F02162
 ManifestType: installer
 ManifestVersion: 1.12.0

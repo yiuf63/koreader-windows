@@ -9,7 +9,7 @@ installed on the target machine.
 
 ## Download and run
 
-1. Get the latest `koreader-win32-x86_64-w64-mingw32-*.zip` from the
+1. Get the latest `koreader-win32-x86_64-*.zip` from the
    [releases page](../../releases).
 2. Unzip it anywhere (e.g. `D:\Apps\`). The zip contains a single `koreader\`
    folder; you can run it from wherever you unpacked it.
@@ -21,11 +21,17 @@ To open a book directly, drag it onto `koreader.exe`, or:
 koreader.exe D:\Books\some-book.epub
 ```
 
-Requires **Windows 10 version 1903 or newer**, 64-bit. That 1903 requirement is
+Requires **Windows 10 version 1903 or newer, 64-bit**. That 1903 requirement is
 real rather than cautious: the build declares `activeCodePage=UTF-8` in its
 application manifest, which is what lets non-ASCII paths work — a book named
 `中文测试书名.epub`, or an installation under a user name with accents. Before
 1903 that manifest field is ignored and such names arrive as mojibake.
+
+There is **no 32-bit build**, and the name does not say so: `TARGET=win32` names
+the platform, and the `mingw32` in the toolchain triplet (`x86_64-w64-mingw32`)
+names the Win32 API, which the 32-bit toolchain shares (`i686-w64-mingw32`).
+The architecture is the `x86_64` in the archive name, and every DLL in it is
+64-bit. `tools/win32/check_arch.sh` reports this for a given build.
 
 Settings, caches and reading history go to `%APPDATA%\koreader`, not next to the
 executable. Set `KO_HOME` to put them elsewhere (useful for a portable install
