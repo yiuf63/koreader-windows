@@ -26,14 +26,14 @@
 set -u
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-KD="${1:-$ROOT/koreader-win32-x86_64-w64-mingw32/koreader}"
+KD="${1:-${ROOT}/koreader-win32-x86_64-w64-mingw32/koreader}"
 
-if [ ! -d "$KD/libs" ]; then
-    echo "error: no libs/ in $KD" >&2
+if [ ! -d "${KD}/libs" ]; then
+    echo "error: no libs/ in ${KD}" >&2
     exit 1
 fi
 
-LIBS="$KD/libs"
+LIBS="${KD}/libs"
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
@@ -49,61 +49,65 @@ fail=0
 # file names. `md5sum` prints the path it was given, and a glob hands it the full
 # one; running from $LIBS keeps the output readable.
 (
-    cd "$LIBS" || exit 1
+    cd "${LIBS}" || exit 1
     for f in *.dll; do
-        [ -e "$f" ] || continue
+        [ -e "${f}" ] || continue
         # `cut` drops md5sum's mode marker (`*` for binary), which would
         # otherwise end up in the printed file name.
-        printf '%s %s\n' "$(md5sum "$f" | cut -d' ' -f1)" "$f"
-    done | sort > "$WORK/sums.txt"
+        printf '%s %s\n' "$(md5sum "${f}" | cut -d' ' -f1)" "${f}"
+    done | sort >"${WORK}/sums.txt"
 )
 awk '{ if ($1 == prev) print name "\t" $2; prev = $1; name = $2 }' \
-    "$WORK/sums.txt" > "$WORK/dups.txt"
+    "${WORK}/sums.txt" >"${WORK}/dups.txt"
 
-if [ -s "$WORK/dups.txt" ]; then
+if [ -s "${WORK}/dups.txt" ]; then
     echo "FAIL: libraries shipped twice"
     while IFS=$'\t' read -r a b; do
-        size=$(stat -c %s "$LIBS/$b" 2>/dev/null || echo 0)
-        printf '  %-28s == %-28s (%s MB)\n' "$a" "$b" \
-            "$(awk -v s="$size" 'BEGIN{printf "%.1f", s/1048576}')"
-    done < "$WORK/dups.txt"
+        size=$(stat -c %s "${LIBS}/${b}" 2>/dev/null || echo 0)
+        printf '  %-28s == %-28s (%s MB)\n' "${a}" "${b}" \
+            "$(awk -v s="${size}" 'BEGIN{printf "%.1f", s/1048576}')"
+    done <"${WORK}/dups.txt"
     echo ""
     echo "  Each of these is one library under two names. The canonical name is"
     echo "  the one to keep; the other is whatever its producer emitted, which"
     echo "  should have been rewritten out of the import archives."
     fail=1
 else
-    echo "ok: no library is shipped twice ($(ls "$LIBS"/*.dll 2>/dev/null | wc -l) libraries)"
+    # `find -L`, not `ls | wc -l`: a name containing a newline would be miscounted
+    # (shellcheck SC2012). `-L` because in the build tree `libs/` is a symlink
+    # into the build directory, and without it `find` reports nothing at all.
+    count=$(find -L "${LIBS}" -maxdepth 1 -name '*.dll' 2>/dev/null | wc -l)
+    echo "ok: no library is shipped twice (${count} libraries)"
 fi
 
 # --- 2. imports that name a file which is not shipped -----------------------
 #
 # This is the load-time failure described above, caught at package time.
 shipped=$(mktemp)
-find -L "$KD" -name '*.dll' 2>/dev/null | while IFS= read -r f; do basename "$f"; done \
-    | sort -u > "$shipped"
+find -L "${KD}" -name '*.dll' 2>/dev/null | while IFS= read -r f; do basename "${f}"; done |
+    sort -u >"${shipped}"
 
 # The system directory, so a genuine Windows DLL is not reported as missing.
 sysroot="${SYSTEMROOT:-C:\\Windows}"
-sysdir="$(printf '%s' "$sysroot" | sed 's|\\|/|g; s|^\([A-Za-z]\):|/\L\1|')/System32"
+sysdir="$(printf '%s' "${sysroot}" | sed 's|\\|/|g; s|^\([A-Za-z]\):|/\L\1|')/System32"
 
 bad=$(mktemp)
 n=0
 while IFS= read -r f; do
-    [ -e "$f" ] || continue
+    [ -e "${f}" ] || continue
     while IFS= read -r dep; do
-        [ -n "$dep" ] || continue
-        grep -qix "$dep" "$shipped" && continue
-        [ -f "$sysdir/$dep" ] && continue
-        printf '  %s needs %s\n' "$(basename "$f")" "$dep" >> "$bad"
+        [ -n "${dep}" ] || continue
+        grep -qix "${dep}" "${shipped}" && continue
+        [ -f "${sysdir}/${dep}" ] && continue
+        printf '  %s needs %s\n' "$(basename "${f}")" "${dep}" >>"${bad}"
         n=$((n + 1))
-    done < <(objdump -p "$f" 2>/dev/null | sed -n 's/^\s*DLL Name: //p')
-done < <(find -L "$KD" \( -name '*.dll' -o -name '*.exe' \) 2>/dev/null)
+    done < <(objdump -p "${f}" 2>/dev/null | sed -n 's/^\s*DLL Name: //p')
+done < <(find -L "${KD}" \( -name '*.dll' -o -name '*.exe' \) 2>/dev/null)
 
-if [ "$n" -gt 0 ]; then
-    echo "FAIL: $n import(s) name a file that is not shipped"
+if [ "${n}" -gt 0 ]; then
+    echo "FAIL: ${n} import(s) name a file that is not shipped"
     echo ""
-    cat "$bad"
+    cat "${bad}"
     echo ""
     echo "  A dependent that records a name this build no longer ships was"
     echo "  linked before its import archive was rewritten. It fails at load"
@@ -114,7 +118,7 @@ else
 fi
 
 echo ""
-if [ "$fail" -eq 0 ]; then
+if [ "${fail}" -eq 0 ]; then
     echo "SINGLE COPIES OK"
     exit 0
 fi

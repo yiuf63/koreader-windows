@@ -21,57 +21,67 @@
 set -eu
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-BT="$ROOT/base/thirdparty"
-BUILD="$ROOT/base/build/x86_64-w64-mingw32"
-OUT="$BUILD/.canonical-names"
+BT="${ROOT}/base/thirdparty"
+BUILD="${ROOT}/base/build/x86_64-w64-mingw32"
+OUT="${BUILD}/.canonical-names"
 
-mkdir -p "$(dirname "$OUT")"
-: > "$OUT"
+mkdir -p "$(dirname "${OUT}")"
+: >"${OUT}"
 
-for f in "$BT"/*/CMakeLists.txt; do
-    grep -oE 'append_shared_lib_install_commands\(INSTALL_CMD [^)]*\)' "$f" 2>/dev/null \
-    | while IFS= read -r c; do
-        args=${c#append_shared_lib_install_commands(INSTALL_CMD }
-        args=${args%)}
+for f in "${BT}"/*/CMakeLists.txt; do
+    grep -oE 'append_shared_lib_install_commands\(INSTALL_CMD [^)]*\)' "${f}" 2>/dev/null |
+        while IFS= read -r c; do
+            args=${c#append_shared_lib_install_commands(INSTALL_CMD }
+            args=${args%)}
 
-        # `${LIB_SPEC}` means the name comes from a variable set in the same file.
-        case "$args" in
-            '${LIB_SPEC}')
-                spec=$(grep -ohE 'set\(LIB_SPEC [^)]*\)' "$f" 2>/dev/null | head -1)
-                [ -n "$spec" ] || continue
-                args=${spec#set(LIB_SPEC }
-                args=${args%)}
-                ;;
-        esac
+            # `${LIB_SPEC}` means the name comes from a variable set in the same file.
+            #
+            # Single quotes are deliberate here, and shellcheck's SC2016 ("expressions
+            # don't expand in single quotes") does not apply: the literal seven
+            # characters `${LIB_SPEC}` are exactly what the CMake file contains, and
+            # expanding them would compare against the empty string instead.
+            # shellcheck disable=SC2016
+            case "${args}" in
+                '${LIB_SPEC}')
+                    spec=$(grep -ohE 'set\(LIB_SPEC [^)]*\)' "${f}" 2>/dev/null | head -1)
+                    [ -n "${spec}" ] || continue
+                    args=${spec#set(LIB_SPEC }
+                    args=${args%)}
+                    ;;
+            esac
 
-        name=${args%% *}
-        rest=${args#* }
-        if [ "$rest" != "$args" ]; then
-            ver=${rest#VERSION }
-            ver=${ver%% *}
-            [ "$ver" != "$rest" ] && printf 'lib%s-%s.dll\n' "$name" "$ver" && continue
-        fi
-        printf 'lib%s.dll\n' "$name"
-    done
-done | sort -u > "$OUT"
+            name=${args%% *}
+            rest=${args#* }
+            if [ "${rest}" != "${args}" ]; then
+                ver=${rest#VERSION }
+                ver=${ver%% *}
+                [ "${ver}" != "${rest}" ] && printf 'lib%s-%s.dll\n' "${name}" "${ver}" && continue
+            fi
+            printf 'lib%s.dll\n' "${name}"
+        done
+done | sort -u >"${OUT}"
 
 # A `set_libname(LIB ${LIB_SPEC})` project (mupdf, freetype2) declares its name
 # through LIB_SPEC alone, so pick those up too.
-for f in "$BT"/*/CMakeLists.txt; do
-    grep -q 'set_libname(LIB ${LIB_SPEC})' "$f" 2>/dev/null || continue
-    spec=$(grep -ohE 'set\(LIB_SPEC [^)]*\)' "$f" 2>/dev/null | head -1)
-    [ -n "$spec" ] || continue
+#
+# Single quotes again intentional: this matches the literal text of the CMake
+# call, not its expansion. See the note on the earlier SC2016 above.
+for f in "${BT}"/*/CMakeLists.txt; do
+    # shellcheck disable=SC2016
+    grep -q 'set_libname(LIB ${LIB_SPEC})' "${f}" 2>/dev/null || continue
+    spec=$(grep -ohE 'set\(LIB_SPEC [^)]*\)' "${f}" 2>/dev/null | head -1)
+    [ -n "${spec}" ] || continue
     args=${spec#set(LIB_SPEC }
     args=${args%)}
     name=${args%% *}
     rest=${args#* }
-    if [ "$rest" != "$args" ]; then
+    if [ "${rest}" != "${args}" ]; then
         ver=${rest#VERSION }
         ver=${ver%% *}
-        [ "$ver" != "$rest" ] && printf 'lib%s-%s.dll\n' "$name" "$ver" >> "$OUT" && continue
+        [ "${ver}" != "${rest}" ] && printf 'lib%s-%s.dll\n' "${name}" "${ver}" >>"${OUT}" && continue
     fi
-    printf 'lib%s.dll\n' "$name" >> "$OUT"
+    printf 'lib%s.dll\n' "${name}" >>"${OUT}"
 done
-sort -u -o "$OUT" "$OUT"
+sort -u -o "${OUT}" "${OUT}"
 
-echo "  wrote $(wc -l < "$OUT") canonical names to $OUT"
+echo "  wrote $(wc -l <"${OUT}") canonical names to ${OUT}"

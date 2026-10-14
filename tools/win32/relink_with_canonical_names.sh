@@ -23,11 +23,11 @@
 set -eu
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-BUILD="$ROOT/base/build/x86_64-w64-mingw32"
-MODULES="$ROOT/base/thirdparty/cmake_modules"
+BUILD="${ROOT}/base/build/x86_64-w64-mingw32"
+MODULES="${ROOT}/base/thirdparty/cmake_modules"
 
-if [ ! -d "$BUILD" ]; then
-    echo "error: no build directory at $BUILD" >&2
+if [ ! -d "${BUILD}" ]; then
+    echo "error: no build directory at ${BUILD}" >&2
     exit 1
 fi
 
@@ -38,30 +38,30 @@ echo "== rewriting import archives for every installed library =="
 # spelling. Whichever ran last would win, so the result depended on directory
 # order. Comparing against the canonical name each library declares keeps this to
 # one rewrite per archive.
-CANONICAL="$BUILD/.canonical-names"
-if [ ! -s "$CANONICAL" ]; then
-    echo "error: $CANONICAL missing; it lists which names are canonical" >&2
+CANONICAL="${BUILD}/.canonical-names"
+if [ ! -s "${CANONICAL}" ]; then
+    echo "error: ${CANONICAL} missing; it lists which names are canonical" >&2
     exit 1
 fi
 
 count=0
 while IFS= read -r base; do
-    [ -n "$base" ] || continue
-    dll="$BUILD/libs/$base"
-    [ -f "$dll" ] || continue
-    out=$(sh "$MODULES/record_canonical_implib.sh" "$dll" \
-            "$BUILD/staging/lib" \
-            "$BUILD"/thirdparty/*/build \
-            "$BUILD"/thirdparty/*/build/lib 2>&1) || {
-        echo "$out" >&2
+    [ -n "${base}" ] || continue
+    dll="${BUILD}/libs/${base}"
+    [ -f "${dll}" ] || continue
+    out=$(sh "${MODULES}/record_canonical_implib.sh" "${dll}" \
+        "${BUILD}/staging/lib" \
+        "${BUILD}"/thirdparty/*/build \
+        "${BUILD}"/thirdparty/*/build/lib 2>&1) || {
+        echo "${out}" >&2
         exit 1
     }
-    if [ -n "$out" ]; then
-        printf '%s\n' "$out" | sed 's/^/  /'
+    if [ -n "${out}" ]; then
+        printf '%s\n' "${out}" | sed 's/^/  /'
         count=$((count + 1))
     fi
-done < "$CANONICAL"
-echo "  ($count libraries had an archive rewritten)"
+done <"${CANONICAL}"
+echo "  (${count} libraries had an archive rewritten)"
 echo ""
 
 if [ "$#" -eq 0 ]; then
@@ -73,5 +73,5 @@ echo "== relinking: $* =="
 # `NINJAFLAGS=-j1` bounds the *inner* ninja each project runs: crengine and
 # tesseract have translation units that peak near 1 GB, and letting the inner
 # build use every core exhausts the machine (`cc1plus.exe: out of memory`).
-cd "$BUILD/cmake"
+cd "${BUILD}/cmake"
 NINJAFLAGS="-j1" ninja -j1 "$@" 2>&1 | tail -20

@@ -4,8 +4,8 @@ local Gamepad = require("device/sdl/gamepad")
 local Generic = require("device/generic/device")
 local Key = require("device/key")
 local UIManager
-local ok, SDL = pcall(require, "ffi/SDL3")
-if not ok then
+local sdl3_ok, SDL = pcall(require, "ffi/SDL3")
+if not sdl3_ok then
     SDL = require("ffi/SDL2_0")
 end
 local ffi = require("ffi")

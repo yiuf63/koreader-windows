@@ -17,10 +17,10 @@
 set -u
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-KD="${1:-$ROOT/koreader-win32-x86_64-w64-mingw32/koreader}"
+KD="${1:-${ROOT}/koreader-win32-x86_64-w64-mingw32/koreader}"
 
-if [ ! -d "$KD/libs" ]; then
-    echo "error: no libs/ in $KD — build first" >&2
+if [ ! -d "${KD}/libs" ]; then
+    echo "error: no libs/ in ${KD} — build first" >&2
     exit 1
 fi
 
@@ -46,20 +46,20 @@ ext-ms-*.dll ucrtbase.dll vcruntime*.dll msvcp*.dll
 
 is_system() {
     local want="${1,,}"
-    for s in $system_dlls; do
+    for s in ${system_dlls}; do
         # shellcheck disable=SC2053
-        [[ "$want" == $s ]] && return 0
+        [[ "${want}" == ${s} ]] && return 0
     done
     return 1
 }
 
 # Everywhere the loader will look, in the order PE uses.
-search_dirs="$KD $KD/libs $KD/common /c/Windows/System32"
+search_dirs="${KD} ${KD}/libs ${KD}/common /c/Windows/System32"
 
 resolve() {
     local want="$1"
-    for d in $search_dirs; do
-        [ -f "$d/$want" ] && return 0
+    for d in ${search_dirs}; do
+        [ -f "${d}/${want}" ] && return 0
     done
     return 1
 }
@@ -67,27 +67,27 @@ resolve() {
 missing_total=0
 checked=0
 
-for dll in "$KD"/*.dll "$KD"/libs/*.dll "$KD"/common/*.dll; do
-    [ -f "$dll" ] || continue
+for dll in "${KD}"/*.dll "${KD}"/libs/*.dll "${KD}"/common/*.dll; do
+    [ -f "${dll}" ] || continue
     checked=$((checked + 1))
-    name="$(basename "$dll")"
+    name="$(basename "${dll}")"
 
     while read -r dep; do
-        [ -n "$dep" ] || continue
-        is_system "$dep" && continue
-        resolve "$dep" && continue
-        echo "MISSING  $name -> $dep"
+        [ -n "${dep}" ] || continue
+        is_system "${dep}" && continue
+        resolve "${dep}" && continue
+        echo "MISSING  ${name} -> ${dep}"
         missing_total=$((missing_total + 1))
-    done < <(objdump -p "$dll" 2>/dev/null \
-             | sed -n 's/^\s*DLL Name: //p' \
-             | sed 's/[[:space:]]*$//')
+    done < <(objdump -p "${dll}" 2>/dev/null |
+        sed -n 's/^\s*DLL Name: //p' |
+        sed 's/[[:space:]]*$//')
 done
 
-if [ "$missing_total" -eq 0 ]; then
-    echo "ok: $checked DLLs, all imports resolvable"
+if [ "${missing_total}" -eq 0 ]; then
+    echo "ok: ${checked} DLLs, all imports resolvable"
     exit 0
 fi
 
 echo ""
-echo "$missing_total unresolved import(s) across $checked DLLs" >&2
+echo "${missing_total} unresolved import(s) across ${checked} DLLs" >&2
 exit 1
