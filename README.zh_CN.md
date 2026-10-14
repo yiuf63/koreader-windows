@@ -190,3 +190,21 @@ tools/win32/report_duplicate_libs.sh  # 若上一条查到重复，用它说明�
 
 如果你想了解 KOReader 本身，请从
 [github.com/koreader/koreader](https://github.com/koreader/koreader) 开始。
+
+### 如果要合并回上游
+
+fork 有两处是刻意为之，提 PR 时需要还原：
+
+- **`.gitmodules` 指向 `koreader-base` 的 fork。** 这样别人
+  `git clone && git submodule update --init` 就能直接编译 —— 对本移植的使用者
+  来说这比便于合并更重要。提交前要把 URL 改回上游，并且那些 `win32: …` 提交
+  得先进 `koreader-base`，否则子模块指针无法解析。
+
+- **两个 CI workflow 都保留。** 上游的 `build.yml` 构建 macOS，`windows.yml`
+  构建 Windows。两者是独立作业，互不拖累；保留 macOS 作业正是用来发现"合并回
+  上游会坏"的改动的 —— 它在本次分支上找出了 6 处这类回归，全部源于把
+  `LIB_EXT`（共享库后缀）当成了模块后缀。
+
+其余改动都做了平台隔离：import 改写只在 `WIN32` 分支里跑，tesseract 的
+`OUTPUT_NAME` 改动在 `$<BOOL:${WIN32}>` 生成器表达式后面，`Makefile.defs` 的
+新增内容位于只匹配 MSYS 的 `CURRENT_OS` 分支中。

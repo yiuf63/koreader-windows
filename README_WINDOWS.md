@@ -211,3 +211,25 @@ itself is the same KOReader, licensed AGPL-3.0 — see [COPYING](COPYING).
 
 If you are looking for KOReader generally, start at
 [github.com/koreader/koreader](https://github.com/koreader/koreader).
+
+### If you are merging this back upstream
+
+Two things about the fork are deliberate and need undoing in a pull request:
+
+- **`.gitmodules` points at the `koreader-base` fork.** That is what lets a
+  plain `git clone && git submodule update --init` build here, which matters
+  more for anyone using this port than for a merge. Upstream's URL has to go
+  back before submitting, and the `win32: …` commits on the fork need to land
+  in `koreader-base` first — the submodule pointer is otherwise unresolvable.
+
+- **Both CI workflows are kept.** Upstream's `build.yml` builds macOS;
+  `windows.yml` builds Windows. They are independent jobs, so neither costs the
+  other anything, and keeping the macOS job is what catches a change here that
+  would not survive a merge — it found six such regressions on this branch,
+  all from `LIB_EXT` being the shared-library suffix rather than the module one.
+
+Everything else is scoped so that other platforms are untouched: the import
+rewriting runs inside a `WIN32` block, tesseract's `OUTPUT_NAME` change sits
+behind a `$<BOOL:${WIN32}>` generator expression, and the `Makefile.defs`
+additions are in `CURRENT_OS` branches that only match MSYS.
+
