@@ -68,7 +68,7 @@ jobs:
             mingw-w64-x86_64-nasm
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           submodules: recursive
           # The version string comes from `git describe`, which needs the tags.
