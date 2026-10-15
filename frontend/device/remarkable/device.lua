@@ -34,6 +34,7 @@ local is_rmppure = rm_model == "reMarkable Tatsu"
 local has_csl = util.which("csl")
 local is_qtfb_shimmed = (os.getenv("LD_PRELOAD") or ""):find("qtfb%-shim") ~= nil
 local is_qtfb_native = os.getenv("KO_USE_QTFB") ~= nil
+local is_blight_native = os.getenv("KO_USE_BLIGHT") ~= nil
 
 if is_rmpp then
     screen_width = 1620 -- unscaled_size_check: ignore
@@ -148,6 +149,7 @@ local RemarkablePaperPro = Remarkable:extend{
     status_path = "/sys/class/power_supply/max1726x_battery/status",
     canSuspend = no, -- Suspend and Standby should be handled by xochitl with KO_DONT_GRAB_INPUT=1 set, otherwise bad things will happen
     canStandby = no,
+    hasGSensor = yes,
     hasFrontlight = yes,
     canTurnFrontlightOff = yes,
     hasColorScreen = yes,
@@ -175,7 +177,8 @@ local RemarkablePaperPure = Remarkable:extend{
     battery_path = "/sys/class/power_supply/max77818_battery/capacity",
     status_path = "/sys/class/power_supply/max77818_battery/status",
     canSuspend = no,
-    canStandby = no
+    canStandby = no,
+    hasGSensor = yes
 }
 
 function RemarkablePaperPro:adjustTouchEvent(ev, by)
@@ -232,7 +235,14 @@ function Remarkable:init()
     -- os.execute("ps | grep $PPID")
     -- logger.info(string.format("parent process is oxide?: %s", parent_process_is_oxide))
 
-    local fb_module = os.getenv("KO_USE_QTFB") and "ffi/framebuffer_qtfb" or "ffi/framebuffer_mxcfb"
+    local fb_module
+    if is_qtfb_native then
+        fb_module = "ffi/framebuffer_qtfb"
+    elseif is_blight_native then
+        fb_module = "ffi/framebuffer_blight"
+    else
+        fb_module = "ffi/framebuffer_mxcfb"
+    end
     self.screen = require(fb_module):new{
         device = self,
         debug = logger.dbg,
@@ -247,7 +257,7 @@ function Remarkable:init()
 
     local event_map = dofile("frontend/device/remarkable/event_map.lua")
     -- If we are launched while Oxide or xochitl is running, remove Power from the event map
-    if oxide_running or is_qtfb_shimmed or is_qtfb_native then
+    if oxide_running or is_qtfb_shimmed or is_qtfb_native or is_blight_native then
         event_map[116] = nil
         event_map[143] = nil
         event_map[20001] = nil
@@ -343,7 +353,7 @@ function Remarkable:init()
     self.screen.native_rotation_mode = rotation_mode
     self.screen.cur_rotation_mode = rotation_mode
 
-    if oxide_running or is_qtfb_shimmed or is_qtfb_native then
+    if oxide_running or is_qtfb_shimmed or is_qtfb_native or is_blight_native then
         -- Disable autosuspend on this device
         PluginShare.pause_auto_suspend = true
     end
@@ -351,6 +361,15 @@ function Remarkable:init()
     if self.powerd:hasHallSensor() then
         if G_reader_settings:has("remarkable_hall_effect_sensor_enabled") then
             self.powerd:onToggleHallSensor(G_reader_settings:readSetting("remarkable_hall_effect_sensor_enabled"))
+        end
+    end
+
+    -- Gyro sensor
+    if self:hasGSensor() then
+        self.input.handleMiscEv = function(this, ev)
+            if ev.code == C.MSC_GYRO then
+                return this:handleGyroEv(ev)
+            end
         end
     end
 
@@ -487,13 +506,13 @@ function Remarkable:setEventHandlers(UIManager)
 end
 
 if is_rm2 then
-    if is_qtfb_native then return Remarkable2 end
+    if is_qtfb_native or is_blight_native then return Remarkable2 end
     if not os.getenv("RM2FB_SHIM") and not is_qtfb_shimmed then
         error("reMarkable 2 requires a RM2FB server and client to work (https://github.com/ddvk/remarkable2-framebuffer or https://github.com/asivery/rmpp-qtfb-shim)")
     end
     return Remarkable2
 elseif is_rmpp then
-    if is_qtfb_native then return RemarkablePaperPro end
+    if is_qtfb_native or is_blight_native then return RemarkablePaperPro end
     if not is_qtfb_shimmed then
         error("reMarkable Paper Pro requires a RM2FB server and client to work (https://github.com/asivery/rm-appload)")
     end
@@ -502,7 +521,7 @@ elseif is_rmpp then
     end
     return RemarkablePaperPro
 elseif is_rmppm then
-    if is_qtfb_native then return RemarkablePaperProMove end
+    if is_qtfb_native or is_blight_native then return RemarkablePaperProMove end
     if not is_qtfb_shimmed then
         error("reMarkable Paper Pro Move requires a RM2FB server and client to work (https://github.com/asivery/rm-appload)")
     end
@@ -511,7 +530,7 @@ elseif is_rmppm then
     end
     return RemarkablePaperProMove
 elseif is_rmppure then
-    if is_qtfb_native then return RemarkablePaperPure end
+    if is_qtfb_native or is_blight_native then return RemarkablePaperPure end
     if not is_qtfb_shimmed then
         error("reMarkable Paper Pure requires a RM2FB server and client to work (https://github.com/asivery/rm-appload)")
     end

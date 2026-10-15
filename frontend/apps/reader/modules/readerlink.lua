@@ -612,14 +612,16 @@ function ReaderLink:isXpointerCoherent(a_xpointer)
     -- Get screen coordinates of xpointer
     local screen_y, screen_x = self.document:getScreenPositionFromXPointer(a_xpointer)
     -- Get again link and a_xpointer from this position
-    local re_link_xpointer, re_a_xpointer = self.document:getLinkFromPosition({x = screen_x, y = screen_y}) -- luacheck: no unused
+    -- Providing forTextSelection=true may give more chances of success here
+    -- (eg. with negative text indent and the link rect being outside of its paragraph rect).
+    local re_link_xpointer, re_a_xpointer = self.document:getLinkFromPosition({x = screen_x, y = screen_y}, true) -- luacheck: no unused
     -- We should get the same a_xpointer. If not, crengine has messed up
     -- and we should not trust this xpointer to get back to this link.
     if re_a_xpointer ~= a_xpointer then
         -- Try it again with screen_x+1 (in the rare cases where screen_x
         -- fails, screen_x+1 usually works - probably something in crengine,
         -- but easier to workaround here that way)
-        re_link_xpointer, re_a_xpointer = self.document:getLinkFromPosition({x = screen_x+1, y = screen_y}) -- luacheck: no unused
+        re_link_xpointer, re_a_xpointer = self.document:getLinkFromPosition({x = screen_x+1, y = screen_y}, true) -- luacheck: no unused
         if re_a_xpointer ~= a_xpointer then
             logger.info("noncoherent a_xpointer:", a_xpointer)
             return false
@@ -1283,6 +1285,21 @@ function ReaderLink:onSelectPrevPageLink()
     return self:selectRelPageLink(-1)
 end
 
+function ReaderLink:isPageLinkSelected()
+    return self.cur_selected_page_link_num ~= nil
+end
+
+function ReaderLink:clearSelectedPageLink(dirty_ui)
+    if self.ui.paging then return end
+    self.cur_selected_page_link_num = nil
+    self.cur_highlighted_link = nil
+    self.document:highlightXPointer()
+    if dirty_ui then
+        UIManager:setDirty(self.dialog, "ui")
+    end
+    return true
+end
+
 function ReaderLink:selectRelPageLink(rel)
     if self.ui.paging then
         -- not implemented for now (see at doing like in showLinkBox()
@@ -1312,9 +1329,7 @@ function ReaderLink:selectRelPageLink(rel)
         end
     end
     if not self.cur_selected_page_link_num then
-        self.cur_selected_link = nil
-        self.document:highlightXPointer()
-        UIManager:setDirty(self.dialog, "ui")
+        self:clearSelectedPageLink(true)
         return
     end
     local selected_link = links[self.cur_selected_page_link_num]
@@ -1331,7 +1346,7 @@ function ReaderLink:selectRelPageLink(rel)
         link_y = selected_link.end_y
     end
     -- Make it a link as expected by onGotoLink
-    self.cur_selected_link = {
+    self.cur_highlighted_link = {
         xpointer = selected_link.section or selected_link.uri,
         marker_xpointer = selected_link.section,
         from_xpointer = from_xpointer,
@@ -1343,32 +1358,26 @@ function ReaderLink:selectRelPageLink(rel)
         link_y = link_y,
     }
     self.document:highlightXPointer() -- clear any previous one
-    self.document:highlightXPointer(self.cur_selected_link.from_xpointer)
+    self.document:highlightXPointer(self.cur_highlighted_link.from_xpointer)
     UIManager:setDirty(self.dialog, "ui")
     return true
 end
 
 function ReaderLink:onGotoSelectedPageLink()
-    if self.cur_selected_link then
-        return self:onGotoLink(self.cur_selected_link, false, isFootnoteLinkInPopupEnabled())
+    local link = self.cur_highlighted_link
+    if link then
+        -- avoid a further key `Press` incorrectly launching the footnote widget again
+        self.cur_highlighted_link = nil
+        return self:onGotoLink(link, false, isFootnoteLinkInPopupEnabled())
     end
 end
 
 function ReaderLink:onPageUpdate()
-    if self.cur_selected_link then
-        self.document:highlightXPointer()
-        self.cur_selected_page_link_num = nil
-        self.cur_selected_link = nil
+    if self.cur_highlighted_link or self.cur_selected_page_link_num then
+        self:clearSelectedPageLink()
     end
 end
-
-function ReaderLink:onPosUpdate()
-    if self.cur_selected_link then
-        self.document:highlightXPointer()
-        self.cur_selected_page_link_num = nil
-        self.cur_selected_link = nil
-    end
-end
+ReaderLink.onPosUpdate = ReaderLink.onPageUpdate
 
 function ReaderLink:onGoToLatestBookmark(ges)
     local latest_bookmark = self.ui.bookmark:getLatestBookmark()
@@ -1601,6 +1610,15 @@ function ReaderLink:showAsFootnotePopup(link, neglect_current_location)
                 end
             end
             self._footnote_popup_discard_previous_close_callback = nil
+        end,
+        navigate_footnote_callback = function(direction)
+            UIManager:close(popup)
+            if direction > 0 then
+                self:onSelectNextPageLink()
+            else
+                self:onSelectPrevPageLink()
+            end
+            self:onGotoSelectedPageLink()
         end,
         dialog = self.dialog,
     }

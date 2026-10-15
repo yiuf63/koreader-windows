@@ -12,20 +12,6 @@ local ffi = require("ffi")
 local C = ffi.C
 require("ffi/posix_h")
 
--- for terminal emulator
-ffi.cdef[[
-static const int SIGTERM = 15;
-
-int grantpt(int fd) __attribute__((nothrow, leaf));
-int unlockpt(int fd) __attribute__((nothrow, leaf));
-char *ptsname(int fd) __attribute__((nothrow, leaf));
-pid_t setsid(void) __attribute__((nothrow, leaf));
-
-static const int TCIFLUSH = 0;
-int tcdrain(int fd) __attribute__((nothrow, leaf));
-int tcflush(int fd, int queue_selector) __attribute__((nothrow, leaf));
-]]
-
 local function check_prerequisites()
     -- This plugin drives a Unix pseudoterminal (`/dev/ptmx`, grantpt/unlockpt/
     -- ptsname, termios...), none of which exist on Windows: it would need a
@@ -456,6 +442,8 @@ function Terminal:generateInputDialog()
             },
             {
             text = "✕", --cancel
+            -- Back goes through here, so it asks about the shell like the button does.
+            id = "close",
             callback = function()
                 UIManager:show(MultiConfirmBox:new{
                     text = _("You can close the terminal, but leave the shell open for further commands or quit it now."),

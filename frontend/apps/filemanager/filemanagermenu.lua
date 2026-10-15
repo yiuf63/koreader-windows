@@ -27,28 +27,22 @@ local FileManagerMenu = InputContainer:extend{
     registered_widgets = nil, -- array
 }
 
-function FileManagerMenu:init()
-    self.menu_items = {
+local function getDefaultMenuButtons()
+    return {
         ["KOMenu:menu_buttons"] = {
             -- top menu
         },
         -- items in top menu
-        filemanager_settings = {
-            icon = "appbar.filebrowser",
-        },
-        setting = {
-            icon = "appbar.settings",
-        },
-        tools = {
-            icon = "appbar.tools",
-        },
-        search = {
-            icon = "appbar.search",
-        },
-        main = {
-            icon = "appbar.menu",
-        },
+        filemanager_settings = { icon = "appbar.filebrowser" },
+        setting = { icon = "appbar.settings" },
+        tools = { icon = "appbar.tools" },
+        search = { icon = "appbar.search" },
+        main = { icon = "appbar.menu" },
     }
+end
+
+function FileManagerMenu:init()
+    self.menu_items = getDefaultMenuButtons()
 
     self.registered_widgets = {}
 
@@ -63,11 +57,15 @@ function FileManagerMenu:registerKeyEvents()
         if Device:hasFewKeys() then
             self.key_events.KeyPressShowMenu = { { { "Menu", "Right" } } }
         end
-        -- OpenLastDoc = { { "ScreenKB", "Back" } } handled by hotkeys
     end
 end
 
-FileManagerMenu.onPhysicalKeyboardConnected = FileManagerMenu.registerKeyEvents
+function FileManagerMenu:onPhysicalKeyboardConnected()
+    self.key_events = {}
+    self:registerKeyEvents()
+    self:onRebuildMenu()
+end
+FileManagerMenu.onPhysicalKeyboardDisconnected = FileManagerMenu.onPhysicalKeyboardConnected
 
 -- NOTE: FileManager emits a SetDimensions on init, it's our only caller
 function FileManagerMenu:initGesListener()
@@ -125,28 +123,10 @@ function FileManagerMenu:initGesListener()
     })
 end
 
-function FileManagerMenu:onOpenLastDoc()
-    local last_file = G_reader_settings:readSetting("lastfile")
-    if not last_file or lfs.attributes(last_file, "mode") ~= "file" then
-        local InfoMessage = require("ui/widget/infomessage")
-        UIManager:show(InfoMessage:new{
-            text = _("Cannot open last document"),
-        })
-        return
-    end
-
-    -- Only close menu if we were called from the menu
-    if self.menu_container then
-        -- Mimic's FileManager's onShowingReader refresh optimizations
-        self.ui.tearing_down = true
-        self.ui.dithered = nil
-        self:onCloseFileManagerMenu()
-    end
-
-    self.ui:openFile(last_file)
-end
-
 function FileManagerMenu:setUpdateItemTable()
+    for k, v in pairs(getDefaultMenuButtons()) do
+        self.menu_items[k] = v
+    end
     local FileChooser = self.ui.file_chooser
 
     -- setting tab
@@ -321,7 +301,7 @@ function FileManagerMenu:setUpdateItemTable()
                         separator = true,
                     },
                     {
-                        text = _("Show filename in Open last/previous menu items"),
+                        text = _("Show filename in Open previous menu items"),
                         checked_func = function()
                             return G_reader_settings:isTrue("open_last_menu_show_filename")
                         end,
@@ -820,36 +800,29 @@ To:
         })
     end
 
-    self.menu_items.cloud_storage = {
-        text = _("Cloud storage"),
-        callback = function()
-            self:onShowCloudStorage()
-        end,
-    }
-
     -- main menu tab
     self.menu_items.open_last_document = {
         text_func = function()
             if not G_reader_settings:isTrue("open_last_menu_show_filename") or G_reader_settings:hasNot("lastfile") then
-                return _("Open last document")
+                return _("Open previous document")
             end
             local last_file = G_reader_settings:readSetting("lastfile")
             local path, file_name = util.splitFilePathName(last_file) -- luacheck: no unused
-            return T(_("Last: %1"), BD.filename(file_name))
+            return T(_("Previous: %1"), BD.filename(file_name))
         end,
         enabled_func = function()
             return G_reader_settings:has("lastfile")
         end,
         callback = function()
-            self:onOpenLastDoc()
+            self.ui:onOpenLastDoc()
         end,
         hold_callback = function()
             local last_file = G_reader_settings:readSetting("lastfile")
             UIManager:show(ConfirmBox:new{
-                text = T(_("Would you like to open the last document: %1?"), BD.filepath(last_file)),
+                text = T(_("Would you like to open the previous document: %1?"), BD.filepath(last_file)),
                 ok_text = _("OK"),
                 ok_callback = function()
-                    self:onOpenLastDoc()
+                    self.ui:onOpenLastDoc()
                 end,
             })
         end
@@ -989,7 +962,7 @@ function FileManagerMenu:getStartWithMenuTable()
         { _("history"), "history" },
         { _("favorites"), "favorites" },
         { _("folder shortcuts"), "folder_shortcuts" },
-        { _("last file"), "last" },
+        { _("most recent document"), "last" },
     }
     local sub_item_table = {}
     for i, v in ipairs(start_withs) do
@@ -1006,12 +979,17 @@ function FileManagerMenu:getStartWithMenuTable()
     end
     return {
         text_func = function()
-            local start_with = G_reader_settings:readSetting("start_with") or "filemanager"
-            for i, v in ipairs(start_withs) do
-                if v[2] == start_with then
-                    return T(_("Start with: %1"), v[1])
+            local idx = 1 -- "filemanager" by default
+            local start_with = G_reader_settings:readSetting("start_with")
+            if start_with then
+                for i, v in ipairs(start_withs) do
+                    if v[2] == start_with then
+                        idx = i
+                        break
+                    end
                 end
             end
+            return T(_("Start with: %1"), start_withs[idx][1])
         end,
         sub_item_table = sub_item_table,
     }
@@ -1077,6 +1055,31 @@ function FileManagerMenu:onCloseFileManagerMenu()
     return true
 end
 
+function FileManagerMenu:teardownMenu()
+    if self.menu_container then
+        self:onCloseFileManagerMenu()
+    end
+    self.tab_item_table = nil
+end
+
+function FileManagerMenu:onRebuildMenu()
+    local was_open = self.menu_container ~= nil
+    local state
+    if was_open and self.menu_container[1] then
+        state = self.menu_container[1]:getState()
+    end
+    self:teardownMenu()
+
+    if was_open then
+        self:onShowMenu(nil, true)
+        local menu = self.menu_container[1]
+        if state and menu.restoreState then
+            menu:restoreState(state.path_stack, state.page)
+        end
+        UIManager:show(self.menu_container)
+    end
+end
+
 function FileManagerMenu:_getTabIndexFromLocation(ges)
     if self.tab_item_table == nil then
         self:setUpdateItemTable()
@@ -1131,13 +1134,12 @@ function FileManagerMenu:onMenuSearch()
 end
 
 function FileManagerMenu:registerToMainMenu(widget)
+    for _, w in ipairs(self.registered_widgets) do
+        if w == widget then
+            return
+        end
+    end
     table.insert(self.registered_widgets, widget)
-end
-
-function FileManagerMenu:onShowCloudStorage()
-    local CloudStorage = require("apps/cloudstorage/cloudstorage")
-    UIManager:show(CloudStorage:new{ ui = self.ui })
-    return true
 end
 
 return FileManagerMenu

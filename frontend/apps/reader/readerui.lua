@@ -333,7 +333,7 @@ function ReaderUI:init()
             if not self.document:loadDocument() then
                 self:dealWithLoadDocumentFailure()
             end
-            logger.dbg(string.format("  loading took %.3f seconds", time.to_s(time.since(start_time))))
+            logger.info(string.format("  loading took %.3f seconds", time.to_s(time.since(start_time))))
 
             -- used to read additional settings after the document has been
             -- loaded (but not rendered yet)
@@ -341,7 +341,7 @@ function ReaderUI:init()
 
             start_time = time.now()
             self.document:render()
-            logger.dbg(string.format("  rendering took %.3f seconds", time.to_s(time.since(start_time))))
+            logger.info(string.format("  rendering took %.3f seconds", time.to_s(time.since(start_time))))
 
             -- Uncomment to output the built DOM (for debugging)
             -- logger.dbg(self.document:getHTMLFromXPointer(".0", 0x6830))
@@ -766,15 +766,21 @@ function ReaderUI:doShowReader(file, provider, seamless)
             end
         end
     end
+    local start_time = time.now()
     local reader = ReaderUI:new{
         dimen = Screen:getSize(),
         covers_fullscreen = true, -- hint for UIManager:_repaint()
         document = document,
         reloading = self.reloading,
         after_open_callback = self.after_open_callback,
+        md5_checksum = self.md5_checksum,
+        arc_settings_data = self.arc_settings_data,
     }
     self.reloading = nil
     self.after_open_callback = nil
+    self.md5_checksum = nil
+    self.arc_settings_data = nil
+    logger.info(string.format("  opening took %.3f seconds", time.to_s(time.since(start_time))))
 
     Screen:setWindowTitle(reader.doc_props.display_title)
     Device:notifyBookState(reader.doc_props.display_title, document)
@@ -927,6 +933,7 @@ function ReaderUI:dealWithLoadDocumentFailure()
 end
 
 function ReaderUI:onHome()
+    UIManager:setSuspendRepaints(false)
     local file = self.document.file
     self:onClose()
     self:showFileManager(file)
@@ -999,6 +1006,37 @@ end
 
 function ReaderUI:getCurrentPage()
     return self.paging and self.paging.current_page or self.document:getCurrentPage()
+end
+
+function ReaderUI:findTextInBookContent(caller, file, search_string)
+    -- Must be called within a subprocess (Trapper).
+    -- Must not be called from modules over Reader to avoid two instances of crengine.
+    logger.dbg("Search in book:", file)
+    local provider = self:extendProvider(file, DocumentRegistry:getProvider(file))
+    local document = DocumentRegistry:openDocument(file, provider)
+    if not document then return false end
+    local loaded, found
+    if document.loadDocument then -- crengine
+        -- We will be half-loading documents and may mess with crengine's state.
+        -- Fortunately, this is run in a subprocess, so we won't be affecting the
+        -- main process's crengine state or any document opened in the main
+        -- process (we furthermore prevent this feature when one is opened).
+        -- To avoid creating half-rendered/invalid cache files, it's best to disable
+        -- crengine saving of such cache files.
+        if not caller.is_cre_cache_disabled then
+            local cre = require("document/credocument"):engineInit()
+            cre.initCache("", 0, true, 40)
+            caller.is_cre_cache_disabled = true
+        end
+        loaded = document:loadDocument()
+    else
+        loaded = true
+    end
+    if loaded then
+        found = document:findText(search_string, 0, 0, not caller.case_sensitive, 1, false, 1)
+    end
+    document:close()
+    return type(found) == "table" and (found.page or found[1]["start"])
 end
 
 return ReaderUI

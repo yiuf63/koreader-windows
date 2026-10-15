@@ -541,8 +541,8 @@ function Kindle:openInputDevices()
         FBInkInput = { fbink_input_scan = function() end }
     end
     local dev_count = ffi.new("size_t[1]")
-    -- We care about: the touchscreen, the raw WacomDigitizer tablet, a properly scaled stylus, pagination buttons, a home button, a fiveway; and the fancy "tap on frame" stuff.
-    local match_mask = bit.bor(C.INPUT_TOUCHSCREEN, C.INPUT_TABLET, C.INPUT_SCALED_TABLET, C.INPUT_PAGINATION_BUTTONS, C.INPUT_HOME_BUTTON, C.INPUT_DPAD, C.INPUT_KINDLE_FRAME_TAP)
+    -- We care about: the touchscreen, a properly scaled stylus, pagination buttons, a home button, a fiveway; and the fancy "tap on frame" stuff.
+    local match_mask = bit.bor(C.INPUT_TOUCHSCREEN, C.INPUT_SCALED_TABLET, C.INPUT_PAGINATION_BUTTONS, C.INPUT_HOME_BUTTON, C.INPUT_DPAD, C.INPUT_KINDLE_FRAME_TAP)
     local devices = FBInkInput.fbink_input_scan(match_mask, 0, 0, dev_count)
     if devices ~= nil then
         for i = 0, tonumber(dev_count[0]) - 1 do
@@ -577,10 +577,14 @@ function Kindle:openInputDevices()
         --       And let's add that isn't also a touchscreen to the mix, because while not true at time of writing, that's an event touchscreens sure can support...
         devices = FBInkInput.fbink_input_scan(C.INPUT_ROTATION_EVENT, bit.bor(C.INPUT_TABLET, C.INPUT_TOUCHSCREEN), C.NO_RECAP, dev_count)
         if devices ~= nil then
+            self.input.rotation_fds = {}
             for i = 0, tonumber(dev_count[0]) - 1 do
                 local dev = devices[i]
                 if dev.matched then
-                    self.input:fdopen(tonumber(dev.fd), ffi.string(dev.path), ffi.string(dev.name))
+                    local fd = tonumber(dev.fd)
+                    self.input:fdopen(fd, ffi.string(dev.path), ffi.string(dev.name))
+                    -- Remember the fd, so the gyro translation hooks can skip lookalike events from other devices
+                    self.input.rotation_fds[fd] = true
                 end
             end
             C.free(devices)
@@ -603,7 +607,7 @@ function Kindle:otaModel()
     else
         model = "kindle-legacy"
     end
-    return model, "ota"
+    return model, "kotasync"
 end
 
 function Kindle:toggleKeyRepeat(toggle)
@@ -1297,6 +1301,7 @@ function KindleTouch:init()
         device = self,
         batt_capacity_file = "/sys/devices/system/yoshi_battery/yoshi_battery0/battery_capacity",
         is_charging_file = "/sys/devices/platform/fsl-usb2-udc/charging",
+        hall_file = "/sys/devices/platform/eink_hall/hall_enable",
     }
     self.input = require("device/input"):new{
         device = self,
@@ -1428,7 +1433,9 @@ local function OasisGyroTranslation(this, ev)
     local DEVICE_ORIENTATION_LANDSCAPE              = 21
     local DEVICE_ORIENTATION_LANDSCAPE_ROTATED      = 22
 
-    if ev.type == C.EV_ABS and ev.code == C.ABS_PRESSURE then
+    -- Only trust the accelerometer, other devices may report ABS_PRESSURE, too (e.g., hotplugged keyboards w/ a digitizer collection)
+    if ev.type == C.EV_ABS and ev.code == C.ABS_PRESSURE
+        and (not ev.fd or not this.rotation_fds or this.rotation_fds[ev.fd]) then
         if ev.value == DEVICE_ORIENTATION_PORTRAIT
             or ev.value == DEVICE_ORIENTATION_PORTRAIT_LEFT
             or ev.value == DEVICE_ORIENTATION_PORTRAIT_RIGHT then
@@ -1536,7 +1543,9 @@ local function KindleGyroTransform(this, ev)
     local UPWARD_LANDSCAPE_LEFT_INTERRUPT_HAPPENED  = 17
     local UPWARD_LANDSCAPE_RIGHT_INTERRUPT_HAPPENED = 18
 
-    if ev.type == C.EV_ABS and ev.code == C.ABS_PRESSURE then
+    -- Only trust the accelerometer, other devices may report ABS_PRESSURE, too (e.g., hotplugged keyboards w/ a digitizer collection)
+    if ev.type == C.EV_ABS and ev.code == C.ABS_PRESSURE
+        and (not ev.fd or not this.rotation_fds or this.rotation_fds[ev.fd]) then
         if ev.value == UPWARD_PORTRAIT_UP_INTERRUPT_HAPPENED then
             -- i.e., UR
             ev.type = C.EV_MSC
@@ -1798,6 +1807,7 @@ function KindleBasic4:init()
         batt_capacity_file = "/sys/class/power_supply/bd71827_bat/capacity",
         is_charging_file = "/sys/class/power_supply/bd71827_bat/charging",
         batt_status_file = "/sys/class/power_supply/bd71827_bat/status",
+        hall_file = "/sys/devices/platform/eink_hall/hall_enable",
     }
 
     -- Enable the so-called "fast" mode, so as to prevent the driver from silently promoting refreshes to REAGL.

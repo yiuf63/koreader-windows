@@ -20,20 +20,32 @@ fi
 # we're always starting from our working directory
 cd "${KOREADER_DIR}" || exit
 
-# reMarkable QTFB setup
-if [ -n "${KO_USE_QTFB}" ]; then
+# reMarkable QTFB/Blight setup
+if [ -n "${KO_USE_QTFB}" ] || [ -n "${KO_USE_BLIGHT}" ]; then
     export KO_DONT_GRAB_INPUT=1
     export KO_DONT_SET_DEPTH=1
+    export LD_LIBRARY_PATH="${KOREADER_DIR}/libs:/home/root/.vellum/lib:${LD_LIBRARY_PATH}"
 fi
 
 fbink_wrapped() {
     if [ -n "${KO_USE_QTFB}" ]; then
+        case "${MACHINE_TYPE}" in
+            "reMarkable Ferrari" | "reMarkable Chiappa")
+                # Our QTFB framebuffer is 32bpp RGBA8888 on the color models,
+                # but the qtfb-shim can only present a 16bpp RGB565 one to
+                # FBInk, and AppLoad refuses mismatched formats on a key.
+                return 0
+                ;;
+        esac
         LD_PRELOAD="/home/root/shims/qtfb-shim.so" \
             QTFB_SHIM_MODEL="false" \
             QTFB_SHIM_INPUT_MODE="NATIVE" \
             QTFB_SHIM_MODE="N_RGB565" \
             QTFB_SHIM_RESPECT_FULL_REFRESH_REQUESTS="1" \
             ./fbink "$@"
+    elif [ -n "${KO_USE_BLIGHT}" ]; then
+        # fbink can't do deferred rendering via blight-client (each invocation creates a separate surface)
+        true
     else
         ./fbink "$@"
     fi
@@ -47,8 +59,7 @@ fi
 
 # update to new version from OTA directory
 ko_update_check() {
-    NEWUPDATE="${KOREADER_DIR}/ota/koreader.updated.tar"
-    INSTALLED="${KOREADER_DIR}/ota/koreader.installed.tar"
+    NEWUPDATE="${KOREADER_DIR}/ota/update.tar.xz"
     if [ -f "${NEWUPDATE}" ]; then
         # If button-listen service is running then stop it during update so that
         # the update can overwrite the binary
@@ -65,18 +76,15 @@ ko_update_check() {
         export FBINK_NAMED_PIPE="/tmp/koreader.fbink"
         rm -f "${FBINK_NAMED_PIPE}"
         FBINK_PID="$(fbink_wrapped --daemon 1 %KOREADER% -q -y -6 -P 0)"
-        # NOTE: See frontend/ui/otamanager.lua for a few more details on how we squeeze a percentage out of tar's checkpoint feature
-        # NOTE: %B should always be 512 in our case, so let stat do part of the maths for us instead of using %s ;).
-        FILESIZE="$(stat -c %b "${NEWUPDATE}")"
-        BLOCKS="$((FILESIZE / 20))"
-        export CPOINTS="$((BLOCKS / 100))"
-        # shellcheck disable=SC2016
-        ./tar xf "${NEWUPDATE}" --strip-components=1 --no-same-permissions --no-same-owner --checkpoint="${CPOINTS}" --checkpoint-action=exec='printf "%s" $((TAR_CHECKPOINT / CPOINTS)) > ${FBINK_NAMED_PIPE}'
+        # Open a handle to the fifo ourselves too: this prevent writes to the
+        # fifo from hanging if fbink crashed (even with no one reading, its
+        # buffer should still be big enough to never be full either).
+        exec 3<>"${FBINK_NAMED_PIPE}"
+        (cd "${UNPACK_DIR}" && "${KOREADER_DIR}/unpack" -X "${NEWUPDATE}" >&3)
         fail=$?
         kill -TERM "${FBINK_PID}"
         # Cleanup behind us...
         if [ "${fail}" -eq 0 ]; then
-            mv "${NEWUPDATE}" "${INSTALLED}"
             # Cleanup leftovers from previous install.
             (cd "${UNPACK_DIR}" && grep -xvFf "${KOREADER_DIR}/ota/package.index" /tmp/package.index | xargs -r rm -vf)
             fbink_wrapped -q -y -6 -pm "Update successful :)"
@@ -87,8 +95,10 @@ ko_update_check() {
             fbink_wrapped -q -y -5 -pm "KOReader may fail to function properly!"
         fi
         rm -f /tmp/package.index "${NEWUPDATE}" # always purge newupdate to prevent update loops
-        unset CPOINTS FBINK_NAMED_PIPE
-        unset BLOCKS FILESIZE FBINK_PID
+        # Fifo cleanup: close our handle, and unlink the path too (in case fbink crashed).
+        exec 3>&-
+        rm -f "${FBINK_NAMED_PIPE}"
+        unset FBINK_NAMED_PIPE FBINK_PID
         # Ensure everything is flushed to disk before we restart. This *will* stall for a while on slow storage!
         busybox sync
 
@@ -110,7 +120,7 @@ export STARDICT_DATA_DIR="data/dict"
 
 ORIG_FB_BPP=""
 ORIG_FB_ROTA=""
-if [ -z "${KO_DONT_SET_DEPTH}" ] && [ -z "${KO_USE_QTFB}" ]; then
+if [ -z "${KO_DONT_SET_DEPTH}" ] && [ -z "${KO_USE_QTFB}" ] && [ -z "${KO_USE_BLIGHT}" ]; then
     # We'll want to ensure Portrait rotation to allow us to use faster blitting codepaths @ 8bpp,
     # so remember the current one before fbdepth does its thing.
     ORIG_FB_ROTA="$(./fbdepth -o)"
@@ -275,7 +285,7 @@ done
 
 # Restore original fb bitdepth if need be...
 # Since we also (almost) always enforce Portrait, we also have to restore the original rotation no matter what ;).
-if [ -z "${KO_DONT_SET_DEPTH}" ] && [ -z "${KO_USE_QTFB}" ]; then
+if [ -z "${KO_DONT_SET_DEPTH}" ] && [ -z "${KO_USE_QTFB}" ] && [ -z "${KO_USE_BLIGHT}" ]; then
     if [ -n "${ORIG_FB_BPP}" ]; then
         echo "Restoring original fb bitdepth @ ${ORIG_FB_BPP}bpp & rotation @ ${ORIG_FB_ROTA}" >>crash.log 2>&1
         ./fbdepth -d "${ORIG_FB_BPP}" -r "${ORIG_FB_ROTA}" >>crash.log 2>&1

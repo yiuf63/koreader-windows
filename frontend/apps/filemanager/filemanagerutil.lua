@@ -88,6 +88,7 @@ function filemanagerutil.resetDocumentSettings(file)
         highlights_imported = true,
         last_page = true,
         last_xpointer = true,
+        last_epubcfi = true,
     }
     local file_abs_path = ffiUtil.realpath(file)
     if file_abs_path then
@@ -439,7 +440,63 @@ function filemanagerutil.showChooseDialog(title_header, caller_callback, current
     UIManager:show(dialog)
 end
 
-function filemanagerutil.openFile(ui, file, caller_pre_callback, no_dialog)
+function filemanagerutil.showSearchResultsOpenFileDialog(caller_ui, text, file, search_str, found_pos, caller_pre_callback)
+    local ButtonDialog = require("ui/widget/buttondialog")
+    local open_file_dialog
+    local function doOpen(after_open_callback)
+        UIManager:close(open_file_dialog)
+        filemanagerutil.openFile(caller_ui, file, caller_pre_callback, true, after_open_callback)
+    end
+    open_file_dialog = ButtonDialog:new{
+        title = BD.filename(text),
+        title_align = "center",
+        buttons = {
+            {{
+                text = _("Open"),
+                callback = function()
+                    doOpen()
+                end,
+            }},
+            {{
+                text = _("Open at first search result"),
+                callback = function()
+                    doOpen(function(ui)
+                        ui.link:addCurrentLocationToStack()
+                        ui.search.last_search_text = search_str
+                        if ui.rolling and type(found_pos) == "string" then
+                            ui.rolling:onGotoXPointer(found_pos, found_pos)
+                        elseif ui.paging and type(found_pos) == "number" then
+                            ui.paging:onGotoPage(found_pos)
+                        end
+                    end)
+                end,
+            }},
+            {{
+                text = _("Open and search forward"),
+                callback = function()
+                    doOpen(function(ui)
+                        UIManager:nextTick(function()
+                            ui.search:searchCallback(0, search_str)
+                        end)
+                    end)
+                end,
+            }},
+            {{
+                text = _("Open and search all results"),
+                callback = function()
+                    doOpen(function(ui)
+                        UIManager:nextTick(function()
+                            ui.search:searchCallback(nil, search_str)
+                        end)
+                    end)
+                end,
+            }},
+        },
+    }
+    UIManager:show(open_file_dialog)
+end
+
+function filemanagerutil.openFile(ui, file, caller_pre_callback, no_dialog, after_open_callback)
     local openFile = function()
         if caller_pre_callback then
             caller_pre_callback()
@@ -456,11 +513,11 @@ function filemanagerutil.openFile(ui, file, caller_pre_callback, no_dialog)
                         ui[provider.provider]:openFile(file)
                     end
                 else -- document
-                    ui:switchDocument(file, nil, nil, provider, is_provider_forced)
+                    ui:switchDocument(file, nil, after_open_callback, provider, is_provider_forced)
                 end
             end
         else -- FM
-            ui:openFile(file)
+            ui:openFile(file, nil, nil, nil, after_open_callback)
         end
     end
 

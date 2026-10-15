@@ -978,15 +978,19 @@ function Kobo:init()
         self:toggleKeyRepeat(false)
     end
 
-    -- Switch to the proper packages on FW 5.x
-    -- NOTE: We don't distribute kobov4 binaries, the omission is on purpose.
-    if util.fileExists("/usr/bin/hwdetect.sh") then
-        self.ota_model = "kobov5"
-    end
-
     -- Finally, Let Generic properly setup the standard stuff.
     -- (Of particular import, this needs to come *after* we've set our input hooks, so that the viewport translation runs last).
     Generic.init(self)
+end
+
+function Kobo:otaModel()
+    local model = "kobo"
+    -- Switch to the proper packages on FW 5.x
+    -- NOTE: We don't distribute kobov4 binaries, the omission is on purpose.
+    if util.fileExists("/usr/bin/hwdetect.sh")  or util.fileExists("/usr/bin/hwdetect") then
+        model = "kobov5"
+    end
+    return model, "kotasync"
 end
 
 function Kobo:exit()
@@ -1162,6 +1166,34 @@ local function getCodeName()
             std_out:close()
         end
     end
+    -- If that fails, run another script (since kobo v5 firmware)
+    if not codename then
+        local std_out = io.popen("/usr/bin/hwdetect.sh 2>/dev/null", "re")
+        if std_out then
+            codename = std_out:read("*line")
+            std_out:close()
+        end
+    end
+    -- If that fails, try binary hwdetect (since firmware 5.18)
+    if not codename then
+        local std_out_device = io.popen("/usr/bin/hwdetect device-name", "re")
+        local std_out_branding = io.popen("/usr/bin/hwdetect branding", "re")
+        local std_out_screen = io.popen("/usr/bin/hwdetect screen-variant", "re")
+        if std_out_device and std_out_branding and std_out_screen then
+            local device = std_out_device:read("*line")
+            local branding = std_out_branding:read("*line")
+            local screen = std_out_screen:read("*line")
+            local branding_first = string.sub(branding, 1, 1)
+            local branding_rest = string.sub(branding, 2)
+
+            branding = string.upper(branding_first) .. branding_rest
+            codename = device .. branding .. screen
+
+            std_out_device:close()
+            std_out_branding:close()
+            std_out_screen:close()
+        end
+    end
     return codename
 end
 
@@ -1203,15 +1235,19 @@ local function getProductId()
 end
 
 -- NOTE: We overload this to make sure checkUnexpectedWakeup doesn't trip *before* the newly scheduled suspend
-function Kobo:rescheduleSuspend()
+function Kobo:rescheduleSuspend(timeout)
     UIManager:unschedule(self.suspend)
     UIManager:unschedule(self._doSuspend)
     UIManager:unschedule(self.checkUnexpectedWakeup)
-    UIManager:scheduleIn(self.suspend_wait_timeout, self.suspend, self)
+    UIManager:scheduleIn(timeout or self.suspend_wait_timeout, self.suspend, self)
 end
 
-function Kobo:scheduleUnexpectedWakeupGuard()
-    self.unexpected_wakeup_count = self.unexpected_wakeup_count + 1
+function Kobo:scheduleUnexpectedWakeupGuard(count_as_unexpected)
+    -- Callers rescheduling the check for something that was not an actual wakeup (e.g. a suspend
+    -- skipped because the device is charging) pass false, to keep the budget for real failures.
+    if count_as_unexpected ~= false then
+        self.unexpected_wakeup_count = self.unexpected_wakeup_count + 1
+    end
     logger.dbg("Kobo suspend: scheduling unexpected wakeup guard")
     UIManager:scheduleIn(15, self.checkUnexpectedWakeup, self)
 end
@@ -1235,6 +1271,7 @@ function Kobo:checkUnexpectedWakeup()
         if self.unexpected_wakeup_count > 20 then
             -- If we've failed to put the device back to sleep over 20 consecutive times, we give up.
             -- Broadcast a specific event, so that AutoSuspend can pick up the baton...
+            logger.err("Kobo suspend: giving up after too many consecutive unexpected wakeups, the device will stay awake")
             local Event = require("ui/event")
             UIManager:broadcastEvent(Event:new("UnexpectedWakeupLimit"))
             return
@@ -1338,9 +1375,10 @@ function Kobo:suspend()
     if self:isMTK() and self.powerd:isCharging() then
         logger.info("Kobo suspend: skipping the suspend request for now: device is plugged in and would otherwise crash!")
 
-        -- Do the usual scheduling dance, so we get a chance to fire the UnexpectedWakeupLimit event...
+        -- Do the usual scheduling dance, so we keep retrying until the device is unplugged...
+        -- NOTE: This is *not* an unexpected wakeup: don't spend the budget on it.
         UIManager:unschedule(self.checkUnexpectedWakeup)
-        self:scheduleUnexpectedWakeupGuard()
+        self:scheduleUnexpectedWakeupGuard(false)
         return
     end
 

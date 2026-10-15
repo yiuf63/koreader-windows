@@ -505,7 +505,7 @@ end
 function ReaderView:drawTempHighlight(bb, x, y)
     local color = self.highlight.saved_drawer ~= "invert"
         and G_reader_settings:isTrue("highlight_selection_use_highlight_color")
-        and Blitbuffer.colorFromName(self.highlight.saved_color) or nil
+        and self.ui.highlight:getHighlightColor(self.highlight.saved_color) or nil
     for page, boxes in pairs(self.highlight.temp) do
         for i = 1, #boxes do
             local rect = self:pageToScreenTransform(page, boxes[i])
@@ -552,7 +552,7 @@ function ReaderView:drawPageSavedHighlight(bb, x, y)
                 local boxes = self.document:getPageBoxesFromPositions(page, item.pos0, item.pos1)
                 if boxes then
                     local drawer = item.drawer
-                    local color = item.color and Blitbuffer.colorFromName(item.color)
+                    local color = self.ui.highlight:getHighlightColor(item.color)
                     if not colorful and color and not Blitbuffer.isColor8(color) then
                         colorful = true
                     end
@@ -625,7 +625,7 @@ function ReaderView:drawXPointerSavedHighlight(bb, x, y)
                     local boxes = self.document:getScreenBoxesFromPositions(item.pos0, item.pos1, true) -- get_segments=true
                     if boxes then
                         local drawer = item.drawer
-                        local color = item.color and Blitbuffer.colorFromName(item.color)
+                        local color = self.ui.highlight:getHighlightColor(item.color)
                         if not colorful and color and not Blitbuffer.isColor8(color) then
                             colorful = true
                         end
@@ -665,13 +665,17 @@ function ReaderView:drawHighlightRect(bb, _x, _y, rect, drawer, color, draw_note
             y = y + math.ceil((rect.h - h) / 2)
         end
     end
+    local is_gray = not color or Blitbuffer.isColor8(color)
     if drawer == "lighten" then
         local lighten_factor = self.highlight.temp and next(self.highlight.temp)
             and (G_reader_settings:readSetting("highlight_selection_lighten_factor") or 0.2) or self.highlight.lighten_factor
-        if not color then
+        if is_gray then
             bb:darkenRect(x, y, w, h, lighten_factor)
         else
             if bb:getInverse() == 1 then
+                if G_reader_settings:isTrue("highlight_selection_invert_highlight_color") then
+                    color = color:invert()
+                end
                 -- MUL doesn't really work on a black background, so, switch to OVER if we're in software nightmode...
                 -- NOTE: If we do *not* invert the color here, it *will* get inverted by the blitter given that the target bb is inverted.
                 --       While not particularly pretty, this (roughly) matches with hardware nightmode, *and* how MuPDF renders highlights...
@@ -683,7 +687,7 @@ function ReaderView:drawHighlightRect(bb, _x, _y, rect, drawer, color, draw_note
             end
         end
     elseif drawer == "underscore" then
-        if not color then
+        if is_gray then
             color = Blitbuffer.COLOR_GRAY_4
         end
         if Blitbuffer.isColor8(color) then
@@ -692,7 +696,7 @@ function ReaderView:drawHighlightRect(bb, _x, _y, rect, drawer, color, draw_note
             bb:paintRect(x, y + h - 1, w, Size.line.thick, Screen.night_mode and color:invert() or color)
         end
     elseif drawer == "strikeout" then
-        if not color then
+        if is_gray then
             color = Blitbuffer.COLOR_BLACK
         end
         local line_y = y + math.floor(h / 2) + 1
@@ -708,7 +712,6 @@ function ReaderView:drawHighlightRect(bb, _x, _y, rect, drawer, color, draw_note
         bb:invertRect(x, y, w, h)
     end
     if self.highlight.note_mark ~= nil and draw_note_mark ~= nil then
-        color = color or Blitbuffer.COLOR_BLACK
         if self.highlight.note_mark == "underline" then
             -- With most annotation styles, we'd risk making this invisible if we used the same color,
             -- so, always draw this in black.
@@ -723,8 +726,8 @@ function ReaderView:drawHighlightRect(bb, _x, _y, rect, drawer, color, draw_note
                 note_mark_pos_x = self.note_mark_pos_x2
             end
             if self.highlight.note_mark == "sideline" then
-                if Blitbuffer.isColor8(color) then
-                    bb:paintRect(note_mark_pos_x, y, self.note_mark_line_w, rect.h, color)
+                if is_gray then
+                    bb:paintRect(note_mark_pos_x, y, self.note_mark_line_w, rect.h, Blitbuffer.COLOR_BLACK)
                 else
                     bb:paintRect(note_mark_pos_x, y, self.note_mark_line_w, rect.h, Screen.night_mode and color:invert() or color)
                 end

@@ -228,7 +228,7 @@ function CreDocument:setAltDocumentProp(prop, value)
 end
 
 function CreDocument:setupDefaultView()
-    if self.loaded then
+    if self._loaded then
         -- Don't apply defaults if the document has already been loaded
         -- as this must be done before calling loadDocument()
         return
@@ -895,6 +895,22 @@ function CreDocument:getPageXPointer(page)
     return self._document:getPageXPointer(page)
 end
 
+function CreDocument:getEPubCFI()
+    return self._document:getEPubCFI()
+end
+
+function CreDocument:getPageEPubCFI(page)
+    return self._document:getPageEPubCFI(page)
+end
+
+function CreDocument:getEPubCFIFromXPointer(xp)
+    return self._document:getEPubCFIFromXPointer(xp)
+end
+
+function CreDocument:getEPubCFIRangeFromXPointers(start_xp, end_xp)
+    return self._document:getEPubCFIRangeFromXPointers(start_xp, end_xp)
+end
+
 function CreDocument:isXPointerInDocument(xp)
     return self._document:isXPointerInDocument(xp)
 end
@@ -955,8 +971,8 @@ function CreDocument:getPageLinks(internal_links_only)
     return self._document:getPageLinks(internal_links_only)
 end
 
-function CreDocument:getLinkFromPosition(pos)
-    return self._document:getLinkFromPosition(pos.x, pos.y)
+function CreDocument:getLinkFromPosition(pos, with_forTextSelection)
+    return self._document:getLinkFromPosition(pos.x, pos.y, with_forTextSelection)
 end
 
 function CreDocument:isLinkToFootnote(source_xpointer, target_xpointer, flags, max_text_size)
@@ -1307,6 +1323,11 @@ end
 function CreDocument:setFontKerning(mode)
     logger.dbg("CreDocument: set font kerning mode", mode)
     self._document:setIntProperty("font.kerning.mode", mode)
+end
+
+function CreDocument:setFontFractionalPositioning(strength)
+    logger.dbg("CreDocument: set font fractionalbpositioning", strength)
+    self._document:setIntProperty("font.fractional.positioning", strength)
 end
 
 function CreDocument:setWordSpacing(values)
@@ -1938,6 +1959,7 @@ function CreDocument:setupCallCache()
             elseif name == "getScreenPositionFromXPointer" then cache_by_tag = true
             elseif name == "getNearestWordFromPosition" then cache_by_tag = true
             elseif name == "getXPointer" then cache_by_tag = true
+            elseif name == "getEPubCFI" then cache_by_tag = true
             elseif name == "isXPointerInCurrentPage" then cache_by_tag = true
             elseif name == "getPageMapCurrentPageLabel" then cache_by_tag = true
             elseif name == "getPageMapVisiblePageLabels" then cache_by_tag = true

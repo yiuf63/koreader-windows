@@ -1,7 +1,5 @@
 REMARKABLE_DIR = $(PLATFORM_DIR)/remarkable
 REMARKABLE_PACKAGE = koreader-$(DIST)$(KODEDUG_SUFFIX)-$(VERSION).zip
-REMARKABLE_PACKAGE_OTA = koreader-$(DIST)$(KODEDUG_SUFFIX)-$(VERSION).tar.xz
-REMARKABLE_PACKAGE_OLD_OTA = koreader-$(DIST)$(KODEDUG_SUFFIX)-$(VERSION).targz
 
 define UPDATE_PATH_EXCLUDES +=
 plugins/SSH.koplugin
@@ -12,7 +10,6 @@ update-prepare: all
 	# ensure that the binaries were built for ARM
 	file --dereference $(INSTALL_DIR)/koreader/luajit | grep ARM
 	# Remarkable scripts
-	$(SYMLINK) $(REMARKABLE_DIR)/spinning_zsync $(INSTALL_DIR)/koreader/
 	$(SYMLINK) $(REMARKABLE_DIR)/koreader.sh $(INSTALL_DIR)/koreader/
 	$(SYMLINK) $(REMARKABLE_DIR)/qtfb_keep_alive.lua $(INSTALL_DIR)/koreader/
 	$(SYMLINK) resources/koreader.png $(INSTALL_DIR)/koreader/icon.png
@@ -32,10 +29,4 @@ endif
 update-zip: update-prepare
 	$(strip $(call mkupdate,$(REMARKABLE_PACKAGE)))
 
-update-txz: update-prepare
-	$(strip $(call mkupdate,$(REMARKABLE_PACKAGE_OTA)))
-
-update-tgz: update-prepare
-	$(strip $(call mkupdate,$(REMARKABLE_PACKAGE_OLD_OTA)))
-
-update: update-zip update-txz update-tgz
+update: update-zip

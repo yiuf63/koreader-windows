@@ -300,7 +300,7 @@ end
 
 function Gestures:gestureTitleFunc(ges)
     local title = gestures_list[ges] or self:friendlyMultiswipeName(ges)
-    return T(_("%1   (%2)"), title, Dispatcher:menuTextFunc(self.gestures[ges]))
+    return T(_("%1   (%2)"), title, Dispatcher:menuTextFunc(self.gestures[ges], true)) -- honor cycle
 end
 
 function Gestures:genMenu(ges)
@@ -342,26 +342,6 @@ function Gestures:genMenu(ges)
     })
     Dispatcher:addSubMenu(self, sub_items, self.gestures, ges)
     sub_items.max_per_page = nil -- restore default, settings in page 2
-    table.insert(sub_items, {
-        text = _("Anchor QuickMenu to gesture position"),
-        enabled_func = function()
-            return util.tableGetValue(self.gestures, ges, "settings", "show_as_quickmenu") or false
-        end,
-        checked_func = function()
-            return util.tableGetValue(self.gestures, ges, "settings", "anchor_quickmenu")
-        end,
-        callback = function()
-            if self.gestures[ges] then
-                if util.tableGetValue(self.gestures, ges, "settings", "anchor_quickmenu") then
-                    util.tableRemoveValue(self.gestures, ges, "settings", "anchor_quickmenu")
-                else
-                    util.tableSetValue(self.gestures, true, ges, "settings", "anchor_quickmenu")
-                end
-                self.updated = true
-            end
-        end,
-        separator = true,
-    })
     table.insert(sub_items, {
         text = _("Always active"),
         checked_func = function()
@@ -601,7 +581,7 @@ function Gestures:onShowGestureOverview()
             end
             local gest = self.gestures[ges_name]
             if gest then
-                local value = Dispatcher:menuTextFunc(gest)
+                local value = Dispatcher:menuTextFunc(gest, true) -- honor cycle
                 if value ~= nothing then
                     local key = gestures_list[ges_name] or self:friendlyMultiswipeName(ges_name)
                     local callback
@@ -623,7 +603,7 @@ function Gestures:onShowGestureOverview()
                     if gest.settings then
                         if gest.settings.show_as_quickmenu then
                             value = value .. " \u{F0CA}"
-                        elseif gest.settings.execute_one_by_one then
+                        elseif gest.settings.execute_one_by_one and not gest.settings.cycle then
                             value = value .. " \u{F051}"
                         end
                     end

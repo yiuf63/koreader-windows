@@ -124,7 +124,6 @@ local order = {
         "calibre",
         "exporter",
         "statistics",
-        "cloud_storage",
         "cloudstorage",
         "move_to_archive",
         "wallabag",
@@ -190,6 +189,7 @@ local order = {
         "search_menu",
         "----------------------------",
         "report_bug",
+        "plugins_disable_external",
         "----------------------------",
         "system_statistics", -- if enabled (Plugin)
         "version",

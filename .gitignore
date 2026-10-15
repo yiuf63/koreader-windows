@@ -1,7 +1,6 @@
 .DS_*
 ._*
 *.AppImage
-*.app
 *.deb
 *.dmg
 *.directory
@@ -55,6 +54,7 @@ i18n
 # Local screenshots taken while checking the Windows build by hand.
 /screenshots-win32/
 
+/*.app
 /.cproject
 /.project
 .gitignore~
