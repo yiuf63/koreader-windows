@@ -148,6 +148,26 @@ A.String = A.is_string
 A.Number = A.is_number
 A.Function = A.is_function
 A.Boolean = A.is_boolean
+-- The remaining spellings the upstream specs use, which this runner did not
+-- implement. Each one showed up as a call on a `nil` after the upstream merge,
+-- failing a spec for a reason that had nothing to do with what it tested.
+--
+-- `equals` (with the `s`) is luassert's own name for `is_equal`; the rest are
+-- the negated forms, which all mean "these two must differ".
+local function not_same(a, b, m)
+    if a == b then fail(m or "expected different") end
+end
+local function not_near(a, b, tol, m)
+    if math.abs(a - b) <= (tol or 1e-9) then fail(m or "expected different") end
+end
+A.equals = A.is_equal
+A.not_truthy = function(v,m) if v then fail(m or "expected falsy") end end
+A.is_truthy = A.truthy
+A.is_same = A.are_same
+A.is_near = function(a,b,tol,m)
+    if math.abs(a-b) > (tol or 1e-9) then fail(m or "expected near") end
+end
+A.is_not_true = function(v,m) if v==true then fail(m or "expected not true") end end
 A.Error = function(fn, m) if pcall(fn) then fail(m or "expected an error") end end
 A.Near = function(a, b, tol, m)
     if math.abs(a - b) > (tol or 1e-9) then fail((m and (m..": ") or "").."expected ~"..tostring(b)..", got "..tostring(a)) end
@@ -169,11 +189,15 @@ function A.has_error(fn,m) if pcall(fn) then fail(m or "expected an error") end 
 A.has_no = { errors = function(fn,m) local ok,e=pcall(fn) if not ok then fail((m and (m..": ") or "")..tostring(e)) end end }
 A.has = { errors = function(fn,m) if not pcall(fn) then fail(m or "expected no errors") end end,
           error = function(fn,m) if pcall(fn) then fail(m or "expected an error") end end }
-A.are = { same = A.are_same, equal = A.are_equal }
+A.are = { same = A.are_same, equal = A.are_equal, not_equal = not_same }
+-- luassert spells the negated forms `are_not`/`is_not`, and both are used.
+A.are_not = A.are
 A.is = { True=A.is_true, False=A.is_false, Nil=A.is_nil, equal=A.is_equal,
          truthy=function(v,m) if not v then fail(m or "expected truthy") end end,
-         not_equal=function(a,b,m) if a==b then fail(m or "expected different") end end }
-A.is_not = { Nil = A.is_not_nil }
+         not_equal=not_same }
+A.is_not = { Nil = A.is_not_nil, True = A.is_not_true,
+             same = not_same, equals = not_same, Equals = not_same,
+             equal = not_same, near = not_near }
 _G.assert = setmetatable(A, { __call = function(_,v,m) if not v then error(m or "assertion failed",2) end end })
 _G.describe = function(n,f) stack[#stack+1]=n; pcall(f); stack[#stack]=nil end
 _G.context = _G.describe
