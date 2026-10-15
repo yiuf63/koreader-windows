@@ -139,46 +139,32 @@ A.Not = { Nil = A.is_not_nil, ["nil"] = A.is_not_nil,
           equal = function(a,b,m) if a==b then fail(m or "expected different") end end }
 A.not_equal = A.Not.equal
 -- luassert exposes both `assert.is.True(...)` and bare `assert.True(...)`.
-A.True = A.is_true
-A.False = A.is_false
-A.Equal = A.is_equal
-A.Same = A.are_same
-A.Table = A.is_table
-A.String = A.is_string
-A.Number = A.is_number
-A.Function = A.is_function
-A.Boolean = A.is_boolean
--- The remaining spellings the upstream specs use, which this runner did not
--- implement. Each one showed up as a call on a `nil` after the upstream merge,
--- failing a spec for a reason that had nothing to do with what it tested.
---
--- `equals` (with the `s`) is luassert's own name for `is_equal`; the rest are
--- the negated forms, which all mean "these two must differ".
-local function not_same(a, b, m)
-    if a == b then fail(m or "expected different") end
-end
-local function not_near(a, b, tol, m)
-    if math.abs(a - b) <= (tol or 1e-9) then fail(m or "expected different") end
-end
-A.equals = A.is_equal
-A.not_truthy = function(v,m) if v then fail(m or "expected falsy") end end
-A.is_truthy = A.truthy
-A.is_same = A.are_same
-A.is_near = function(a,b,tol,m)
-    if math.abs(a-b) > (tol or 1e-9) then fail(m or "expected near") end
-end
-A.is_not_true = function(v,m) if v==true then fail(m or "expected not true") end end
-A.Error = function(fn, m) if pcall(fn) then fail(m or "expected an error") end end
-A.Near = function(a, b, tol, m)
-    if math.abs(a - b) > (tol or 1e-9) then fail((m and (m..": ") or "").."expected ~"..tostring(b)..", got "..tostring(a)) end
-end
-function A.are_same(a,b,m)
-    if type(a)=="table" and type(b)=="table" then
-        for k,v in pairs(a) do if b[k]~=v then fail("tables differ at "..tostring(k)) end end
-        for k in pairs(b) do if a[k]==nil then fail("tables differ at "..tostring(k)) end end
-        return
+-- luassert's `same` is a *deep* comparison -- it walks nested tables, and
+-- compares by value rather than identity. This used to check only the top
+-- level (`a[k] ~= v`), so a spec comparing tables of tables failed with
+-- "tables differ at 1" even when the contents matched, which is a bug in the
+-- test double rather than in what the spec was testing.
+local function deep_equal(a, b, seen)
+    if a == b then return true end
+    if type(a) ~= "table" or type(b) ~= "table" then return false end
+    -- Guards against a cycle in either table.
+    seen = seen or {}
+    if seen[a] and seen[a][b] then return true end
+    seen[a] = seen[a] or {}
+    seen[a][b] = true
+    for k, v in pairs(a) do
+        if not deep_equal(v, b[k], seen) then return false end
     end
-    A.is_equal(a,b,m)
+    for k in pairs(b) do
+        if a[k] == nil then return false end
+    end
+    return true
+end
+
+function A.are_same(a,b,m)
+    if not deep_equal(a, b) then
+        fail((m and (m..": ") or "").."expected the same, got different")
+    end
 end
 function A.is_table(v,m) if type(v)~="table" then fail((m or "expected table")..", got "..type(v)) end end
 function A.is_string(v,m) if type(v)~="string" then fail((m or "expected string")..", got "..type(v)) end end
@@ -189,12 +175,49 @@ function A.has_error(fn,m) if pcall(fn) then fail(m or "expected an error") end 
 A.has_no = { errors = function(fn,m) local ok,e=pcall(fn) if not ok then fail((m and (m..": ") or "")..tostring(e)) end end }
 A.has = { errors = function(fn,m) if not pcall(fn) then fail(m or "expected no errors") end end,
           error = function(fn,m) if pcall(fn) then fail(m or "expected an error") end end }
+-- ---------------------------------------------------------------------------
+-- Aliases.
+--
+-- Deliberately after every function above: these are plain assignments, so
+-- naming one before its target is defined stores `nil` and fails the spec later
+-- with `attempt to call field 'X' (a nil value)` -- which is exactly what
+-- `A.Same = A.are_same` did, silently, until the upstream merge started
+-- exercising it.
+--
+-- luassert gives each assertion several spellings, and the specs use a mix.
+local function not_same(a, b, m)
+    if a == b then fail(m or "expected different") end
+end
+local function not_near(a, b, tol, m)
+    if math.abs(a - b) <= (tol or 1e-9) then fail(m or "expected different") end
+end
+
+A.equals = A.is_equal
+A.True = A.is_true
+A.False = A.is_false
+A.Equal = A.is_equal
+A.Same = A.are_same
+A.Table = A.is_table
+A.String = A.is_string
+A.Number = A.is_number
+A.Function = A.is_function
+A.Boolean = A.is_boolean
+A.Error = function(fn, m) if pcall(fn) then fail(m or "expected an error") end end
+A.Near = function(a, b, tol, m)
+    if math.abs(a - b) > (tol or 1e-9) then fail((m and (m..": ") or "").."expected ~"..tostring(b)..", got "..tostring(a)) end
+end
+A.not_truthy = function(v,m) if v then fail(m or "expected falsy") end end
+A.is_truthy = A.truthy
+A.is_same = A.are_same
+A.is_not_true = function(v,m) if v==true then fail(m or "expected not true") end end
+A.is_near = function(a,b,tol,m)
+    if math.abs(a-b) > (tol or 1e-9) then fail(m or "expected near") end
+end
 A.are = { same = A.are_same, equal = A.are_equal, not_equal = not_same }
 -- luassert spells the negated forms `are_not`/`is_not`, and both are used.
 A.are_not = A.are
 A.is = { True=A.is_true, False=A.is_false, Nil=A.is_nil, equal=A.is_equal,
-         truthy=function(v,m) if not v then fail(m or "expected truthy") end end,
-         not_equal=not_same }
+         truthy=A.truthy, not_equal=not_same }
 A.is_not = { Nil = A.is_not_nil, True = A.is_not_true,
              same = not_same, equals = not_same, Equals = not_same,
              equal = not_same, near = not_near }
