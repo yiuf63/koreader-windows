@@ -16,7 +16,19 @@ release_date="$(git show -s --format=format:"%cd" --date=short HEAD)"
 
 if out="$(git describe --match='v[0-9]*' HEAD 2>&1)"; then
     version="${out}"
-    epoch_rev="${version%%-*}"
+    # The tag, for `git log`'s date. Not `${version%%-*}`: that takes the text up
+    # to the *first* hyphen, which is only the whole tag when the tag has none.
+    # `v2026.10-win32.5` became `v2026.10` that way, and `git log -1 v2026.10`
+    # then failed with "ambiguous argument" -- no such revision, and the build
+    # stopped at "failed to determine version".
+    #
+    # `git describe` appends `-<commits>-g<sha>` only when HEAD is ahead of the
+    # tag, so strip that suffix when it is there and otherwise the tag is the
+    # whole string.
+    case "${version}" in
+        *-[0-9]*-g[0-9a-f]*) epoch_rev="${version%-*-g*}" ;;
+        *) epoch_rev="${version}" ;;
+    esac
 else
     # No tag, shallow clone?
     printf '%s\n' "${ANSI_MAGENTA}WARNING: cannot describe current git revision:${ANSI_RESET} ${out}" 1>&2
