@@ -10,6 +10,7 @@ release: &RELEASE [
   macos-.*,
   pocketbook.*,
   remarkable.*,
+  win32,
 ]
 
 pull_request: &PR [
@@ -25,6 +26,9 @@ pull_request: &PR [
   macos-arm64,
   pocketbook,
   remarkable-aarch64,
+  # Not built on Linux, so worth gating PRs on: it catches a change that breaks
+  # the MinGW build while everything else still compiles.
+  win32,
 ]
 
 push: [
@@ -213,6 +217,63 @@ remarkable: # {{{
   - <<: *REMARKABLE
     id: remarkable-aarch64
     job: reMarkable Pro
+
+# }}}
+
+win32: # {{{
+
+  - &WIN32
+    id: win32
+    job: Windows (MinGW-w64)
+    # NOTE: no `image`: the build runs on the runner itself, not in a container.
+    #       `build_matrix.yml` uses `matrix.image != ''` to decide whether to
+    #       wrap the command in `kodev docker`, and this target needs an MSYS2
+    #       host rather than the Linux images the other jobs use.
+    runs-on: windows-2025
+    target: win32
+    # MSYS2's own packages, installed by `msys2/setup-msys2` before the build.
+    #
+    # `mingw-w64-x86_64-toolchain` is the *group*, not its individual members:
+    # the prefixed tool aliases (`x86_64-w64-mingw32-windres` and friends) are
+    # created by the group's install and do not belong to any single package, so
+    # naming gcc/binutils directly leaves them missing and the build fails late
+    # with "windres: command not found".
+    #
+    # Both `cmake`/`ninja`/`meson` (the MSYS packages) and their
+    # `mingw-w64-x86_64-` counterparts are needed: the build writes MSYS paths
+    # into `koreader_vars.cmake` and into the compiler-probe scratch files, and
+    # only the MSYS builds resolve those.
+    #
+    # `jq` is needed by `.ci/build_environment_setup.sh`, which the matrix runs
+    # for every job.
+    msys2_packages: >-
+      bsdtar
+      cmake
+      diffutils
+      git
+      jq
+      lzip
+      make
+      meson
+      mingw-w64-x86_64-cmake
+      mingw-w64-x86_64-nasm
+      mingw-w64-x86_64-ninja
+      mingw-w64-x86_64-pkgconf
+      mingw-w64-x86_64-toolchain
+      ninja
+      tar
+      unzip
+      zip
+    cache_size: 90MB
+    # `artifacts: true` is what makes the matrix install and package (the
+    # `Install` and `Generate artifacts` steps are gated on it), which is the
+    # point of building this target in CI at all: the artifact is the deliverable.
+    artifacts: true
+    # The spec runner here is a stand-in for busted (`tools/win32/run_specs.sh`),
+    # and the suite is not fully green on this target yet; `windows.yml` reports
+    # it without failing. Not requested, so `Test` is skipped -- it also needs
+    # `base/utils/fake_tty.py`, which is `pty`-based and does not exist here.
+    tests: false
 
 # }}}
 

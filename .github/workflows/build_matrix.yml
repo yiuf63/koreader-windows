@@ -35,9 +35,11 @@ jobs:
         # NOTE: can't use `runner.os` context here…
         shell: >
           ${{
-            format('{0}{1}bash --noprofile --norc -eo pipefail {{0}}',
-              matrix.target != 'macos' && 'stdbuf --error=L --output=L ' || '',
-              matrix.image != '' && format('{0}/kodev docker kontainer exec ', github.workspace) || ''
+            format('{0}{1}{2}{3}',
+              matrix.target != 'macos' && matrix.target != 'win32' && 'stdbuf --error=L --output=L ' || '',
+              matrix.image != '' && format('{0}/kodev docker kontainer exec ', github.workspace) || '',
+              matrix.target == 'win32' && 'msys2 ' || '',
+              matrix.target == 'win32' && '{0}' || 'bash --noprofile --norc -eo pipefail {0}'
             )
           }}
 
@@ -62,6 +64,72 @@ jobs:
       # }}}
 
       # Setup. {{{
+
+      - name: Setup MSYS2 (Windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MSYS
+          update: false
+          # The default `path-type: strict` *replaces* PATH inside the MSYS shell
+          # with MSYS2's own, which discards anything added through GITHUB_PATH —
+          # leaving /mingw64/bin unreachable and the compiler "not found".
+          # `inherit` keeps the converted Windows PATH.
+          path-type: inherit
+          # Packages are installed in the next step instead: the action's
+          # `install:` runs pacman in a way whose output is not always captured,
+          # and when it fails the workflow only reports a missing compiler much
+          # later, with no sign of the real error.
+          install: ""
+
+      - name: Install build dependencies (Windows)
+        if: runner.os == 'Windows'
+        # NOTE: `msys2 {0}`, not `pwsh`: `pacman` has to run inside the MSYS
+        #       environment it is installing into. From PowerShell it inherits the
+        #       Windows PATH, and the MSYS packages land where the MSYS shell's
+        #       own `find_program` cannot see them (`meson` in particular).
+        shell: msys2 {0}
+        # NOTE: `matrix.msys2_packages` is a folded scalar (space separated), so
+        #       it is passed unquoted and split by the shell.
+        run: |
+          pacman --noconfirm --needed --sync ${{ matrix.msys2_packages }}
+
+      - name: Set up PATH (Windows)
+        if: runner.os == 'Windows'
+        # NOTE: `msys2 {0}`, not `bash`: the latter is Git Bash on this runner,
+        #       whose PATH is the Windows one (`;`-separated, `C:\...` entries).
+        #       Appending that to an MSYS PATH yields something the MSYS shell
+        #       cannot use, and `git` then looks missing even though
+        #       `/usr/bin/git.exe` is right there.
+        shell: msys2 {0}
+        # An MSYS shell has /usr/bin but not /mingw64/bin on PATH — that is the
+        # MINGW64 shell's job — while the build needs the MinGW toolchain (and
+        # cmake/ninja) reachable.
+        #
+        # The *order* matters and is not interchangeable: MSYS2 ships two cmake
+        # builds, and only the MSYS one understands MSYS paths like `/d/a/...`.
+        # The native one silently fails to resolve the paths the build writes
+        # into `koreader_vars.cmake`, so every `include()` in the project then
+        # fails with "could not find requested file" — an error that points at
+        # the includes rather than at cmake.
+        #
+        # This goes into `GITHUB_ENV` rather than `GITHUB_PATH`: the latter is
+        # prepended to the *Windows* PATH, which the MSYS launcher then
+        # re-derives, so the ordering above would not be preserved.
+        run: |
+          env_file="$GITHUB_ENV"
+          case "$env_file" in
+            [A-Za-z]:*) env_file="$(cygpath -u "$env_file")" ;;
+          esac
+          echo "PATH=/usr/bin:/mingw64/bin:/usr/local/bin:/bin:$PATH" >> "$env_file"
+          # The runner ships Strawberry Perl's ccache, which the build picks up
+          # via `command -v ccache`. Its path is a Windows one
+          # (`C:\Strawberry\c\bin\ccache`), and passing that through the MSYS
+          # shell to ninja mangles it into `\c\Strawberry\c\bin\ccache`, which
+          # fails the compiler probe with "CreateProcess failed: The system
+          # cannot find the file specified." Set here rather than per-step so
+          # every `make` in this job gets it, `all` included.
+          echo "USE_NO_CCACHE=1" >> "$env_file"
 
       - name: Setup Python (macOS)
         if: runner.os == 'macOS'
@@ -131,6 +199,15 @@ jobs:
       - name: Restore build directory
         id: build-restore
         uses: actions/cache/restore@v6.1.0
+        # NOTE: Windows takes no part in the build cache. `BUILD_PATHS` is written
+        #       for the layout the other targets use (`build/...` at the repository
+        #       root), while this target builds into `base/build/`, so a restore
+        #       hands back a tree that does not line up with what is on disk. The
+        #       first run that did restore it stalled: `sqlite` installed at 93%,
+        #       then nothing for the rest of GitHub's six-hour limit. A from-scratch
+        #       build takes about 15 minutes (`windows.yml` has always done that),
+        #       which is cheaper than debugging a half-restored tree.
+        if: matrix.target != 'win32'
         with:
           # NOTE:
           # - we need to use `build/*` to work around https://github.com/actions/toolkit#713
@@ -181,9 +258,17 @@ jobs:
           # does not get removed after 7 days with no use.
           lookup-only: ${{ steps.build-restore.outputs.cache-hit }}
 
+      # NOTE: `buildstats` is ELF-shaped: it pipes `ninjatracing` output through
+      #       `git column`, and `ninjatracing` is installed by the macOS setup
+      #       step. It is a timing report, not a build step, so Windows skips it
+      #       and keeps the download.
       - name: Download
-        if: steps.build-restore.outputs.cache-hit != 'true' && steps.download-restore.outputs.cache-hit != 'true'
+        if: steps.build-restore.outputs.cache-hit != 'true' && steps.download-restore.outputs.cache-hit != 'true' && matrix.target != 'win32'
         run: make download-all buildstats
+
+      - name: Download (Windows)
+        if: steps.build-restore.outputs.cache-hit != 'true' && steps.download-restore.outputs.cache-hit != 'true' && matrix.target == 'win32'
+        run: make download-all
 
       - name: Save download cache
         uses: actions/cache/save@v6.1.0
@@ -198,10 +283,40 @@ jobs:
 
       - name: Build
         id: build
-        if: steps.build-restore.outputs.cache-hit != 'true'
+        if: steps.build-restore.outputs.cache-hit != 'true' && matrix.target != 'win32'
         run: make base
 
+      # NOTE: `-j4` rather than the default: crengine has translation units that
+      #       each peak near 1GB, and more at once exhausts the runner.
+      #       `USE_NO_CCACHE` is set job-wide above.
+      - name: Build (Windows)
+        id: build-win32
+        if: steps.build-restore.outputs.cache-hit != 'true' && matrix.target == 'win32'
+        # NOTE: bounded, unlike the other targets. A stalled sub-process on this
+        #       platform otherwise sits until GitHub's six-hour job limit, and the
+        #       log stops dead with no indication of which project hung -- that is
+        #       what happened at sqlite's install step, after which nothing was
+        #       printed for the rest of the run. `timeout` turns that into a
+        #       failure that names the limit, and the per-project output that is
+        #       already there says where it stopped.
+        timeout-minutes: 90
+        run: |
+          # NOTE: spelled out rather than inherited from `TARGET` in the
+          #       environment, and `make base` rather than the default target:
+          #       this is the command `windows.yml` runs (minus its `all`), so a
+          #       difference here cannot be the reason one works and the other
+          #       does not.
+          #
+          #       `which`, so the log records which cmake won the PATH race -- the
+          #       build writes MSYS paths into `koreader_vars.cmake`, and the
+          #       native cmake silently fails to resolve those.
+          which cmake ninja make
+          make TARGET=win32 base -j4
+
       - name: Dump build timings
+        # NOTE: `steps.build` is the non-Windows step, so on that target this
+        #       resolves to '' -- which is not in the list, hence skipped. Windows
+        #       would need `ninjatracing` anyway; see the Download step.
         if: contains('failure success', steps.build.conclusion) && !cancelled()
         run: make buildstats
 
@@ -241,18 +356,33 @@ jobs:
 
       # Dump & check binaries. {{{
 
+      # NOTE: `make bininfo`/`make bincheck` are ELF/Mach-O only: the former
+      #       parses `readelf`/`otool` output and has no PE counterpart, and the
+      #       latter is not even defined outside the Linux/Darwin branch of
+      #       `base/Makefile`. Windows uses the PE equivalents from
+      #       `tools/win32/`, which also cover what the two do for the ELF
+      #       targets (every import resolves to a shipped file or a system DLL).
       - name: Dump binaries runtime path & dependencies
+        if: matrix.target != 'win32'
         run: make bininfo
 
       - name: Checking binaries for missing dependencies
-        if: steps.build-restore.outputs.cache-hit != 'true'
+        if: matrix.target != 'win32' && steps.build-restore.outputs.cache-hit != 'true'
         run: make bincheck
+
+      - name: Dump binaries runtime path & dependencies (Windows)
+        if: matrix.target == 'win32'
+        run: |
+          tools/win32/check_dlls.sh
+          tools/win32/check_single_copies.sh
 
       # }}}
 
       - name: Save build directory
         uses: actions/cache/save@v6.1.0
-        if: steps.build-restore.outputs.cache-hit != 'true'
+        # Windows neither restores nor saves this cache; see `Restore build
+        # directory` above for why.
+        if: matrix.target != 'win32' && steps.build-restore.outputs.cache-hit != 'true'
         with:
           path: *BUILD_PATHS
           key: ${{ steps.build-restore.outputs.cache-primary-key }}
@@ -272,10 +402,18 @@ jobs:
       # Generate & upload artifacts. {{{
 
       - name: Generate artifacts
-        if: matrix.artifacts
+        if: matrix.artifacts && matrix.target != 'win32'
         # Note: ensure the build skeleton is created, so there are no dangling
         # symlinks (e.g. `data/dict`) to trip 7zip during artifact generation…
         run: make --assume-old=all skeleton po update
+
+      # NOTE: Windows packages with `update-zip` rather than `update-7z` --
+      #       `make/win32.mk` has no 7z target, and a zip keeps the executable
+      #       bit-free semantics the platform expects. `skeleton`/`po` are not
+      #       needed: the Windows install tree is assembled by `all`.
+      - name: Generate artifacts (Windows)
+        if: matrix.artifacts && matrix.target == 'win32'
+        run: make --assume-old=all update-zip
 
       - name: Upload artifacts
         if: matrix.artifacts
