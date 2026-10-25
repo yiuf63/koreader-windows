@@ -328,14 +328,18 @@ jobs:
           #       native cmake silently fails to resolve those.
           which cmake ninja make
 
-          # Ninja reports the edge it is on. `make` only prints a per-project
-          # percentage, which stops advancing once the last third-party library
-          # is installed -- leaving no way to tell a slow link from a deadlock.
+          # `VERBOSE=1` makes the base Makefile add `-v` to ninja, so every
+          # command is echoed as it starts. Without it ninja only draws its
+          # status line on a tty, and the log of a job that ends up killed shows
+          # nothing between the last project's install and the timeout -- which
+          # is exactly the ambiguity this is here to remove.
+          #
+          # `NINJA_STATUS` is still worth setting: it is what ninja prints when it
+          # does report progress, and `%r` is the count of running edges.
           export NINJA_STATUS="[ninja %f/%t %r running] "
 
           # A heartbeat, so a stall shows up as "output stopped after line N"
-          # rather than as silence. Nothing else here produces output during a
-          # single long-running command.
+          # rather than as silence.
           (
             while :; do
               sleep 60
@@ -345,7 +349,7 @@ jobs:
           heartbeat=$!
           trap 'kill "${heartbeat}" 2>/dev/null || true' EXIT
 
-          make TARGET=win32 base -j4
+          make TARGET=win32 base -j4 VERBOSE=1
 
       - name: Dump build timings
         # NOTE: `steps.build` is the non-Windows step, so on that target this

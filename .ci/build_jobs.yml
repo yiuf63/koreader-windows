@@ -229,7 +229,11 @@ win32: # {{{
     #       `build_matrix.yml` uses `matrix.image != ''` to decide whether to
     #       wrap the command in `kodev docker`, and this target needs an MSYS2
     #       host rather than the Linux images the other jobs use.
-    runs-on: windows-2025
+    # NOTE: `windows-latest`, the same label `windows.yml` uses, rather than a
+    #       pinned `windows-2025`: that workflow is the one configuration here
+    #       known to build this target end to end, so matching it removes one
+    #       variable from a comparison that has otherwise kept failing.
+    runs-on: windows-latest
     target: win32
     # MSYS2's own packages, installed by `msys2/setup-msys2` before the build.
     #
