@@ -342,9 +342,16 @@ jobs:
             while :; do
               sleep 60
               printf '[heartbeat] %s\n' "$(date -u +%H:%M:%SZ)"
-              # The point of the exercise: which commands are still running.
-              # `ps` is MSYS's own (procps), so this needs no extra package.
-              ps -W 2>/dev/null | grep -viE 'ps\.exe|grep|-bash|sleep' | tail -20 || true
+              # The point of the exercise: which commands are still running, and
+              # what they are. `ps` without `-W` lists only the MSYS processes,
+              # which is what the build runs as, and its first column is the PID
+              # that `/proc` is keyed on -- the Windows PID in column four is
+              # not. The command line names the project, and so does the cwd.
+              ps 2>/dev/null | tail -n +2 | while read -r pid _; do
+                printf '  [%s] cwd=%s\n' \
+                  "$(tr '\0' ' ' < "/proc/${pid}/cmdline" 2>/dev/null | cut -c1-200)" \
+                  "$(readlink "/proc/${pid}/cwd" 2>/dev/null | sed 's|.*/build/thirdparty/|tp/|')"
+              done || true
             done
           ) &
           heartbeat=$!
