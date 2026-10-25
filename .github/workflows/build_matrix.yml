@@ -328,28 +328,29 @@ jobs:
           #       native cmake silently fails to resolve those.
           which cmake ninja make
 
-          # `VERBOSE=1` makes the base Makefile add `-v` to ninja, so every
-          # command is echoed as it starts. Without it ninja only draws its
-          # status line on a tty, and the log of a job that ends up killed shows
-          # nothing between the last project's install and the timeout -- which
-          # is exactly the ambiguity this is here to remove.
+          # NOTE: `VERBOSE=1` does *not* help here, and it was worth learning why:
+          #       ninja runs up to `-j4` edges at once and buffers each one's
+          #       output, printing it only when that edge finishes. A command that
+          #       never returns therefore never appears in the log at all -- the
+          #       log just stops at whatever finished last. What is needed is the
+          #       process tree, so the heartbeat prints it.
           #
-          # `NINJA_STATUS` is still worth setting: it is what ninja prints when it
-          # does report progress, and `%r` is the count of running edges.
+          #       `NINJA_STATUS` is likewise invisible: it is only drawn on a tty.
           export NINJA_STATUS="[ninja %f/%t %r running] "
 
-          # A heartbeat, so a stall shows up as "output stopped after line N"
-          # rather than as silence.
           (
             while :; do
               sleep 60
-              printf '[heartbeat] still building: %s\n' "$(date -u +%H:%M:%SZ)"
+              printf '[heartbeat] %s\n' "$(date -u +%H:%M:%SZ)"
+              # The point of the exercise: which commands are still running.
+              # `ps` is MSYS's own (procps), so this needs no extra package.
+              ps -W 2>/dev/null | grep -viE 'ps\.exe|grep|-bash|sleep' | tail -20 || true
             done
           ) &
           heartbeat=$!
           trap 'kill "${heartbeat}" 2>/dev/null || true' EXIT
 
-          make TARGET=win32 base -j4 VERBOSE=1
+          make TARGET=win32 base -j4
 
       - name: Dump build timings
         # NOTE: `steps.build` is the non-Windows step, so on that target this
