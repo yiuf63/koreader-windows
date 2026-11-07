@@ -234,7 +234,10 @@ jobs:
           lookup-only: ${{ steps.build-restore.outputs.cache-hit }}
 
       - name: Setup build cache
-        if: steps.build-restore.outputs.cache-hit != 'true'
+        # NOTE: skipped on Windows: this target sets `USE_NO_CCACHE` (the runner's
+        #       ccache is Strawberry Perl's, and its Windows path gets mangled
+        #       through the MSYS shell), so there is no ccache to configure here.
+        if: matrix.target != 'win32' && steps.build-restore.outputs.cache-hit != 'true'
         run: |
           set -x
           which ccache
