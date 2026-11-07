@@ -23,9 +23,18 @@ declare -a default_env=(
     CLICOLOR_FORCE=1
     GITHUB_ACTIONS="${GITHUB_ACTIONS}"
     INSTALL_DIR=install
-    OUTPUT_DIR=build
     TARGET="${matrix[target]}"
 )
+# NOTE: `OUTPUT_DIR` is deliberately not overridden for `win32`. The default
+#       (`base/build/$(MACHINE)`, see `base/Makefile.defs` and the comment at the
+#       top of `make/win32.mk`) is where that target expects its build tree, and
+#       forcing `build` at the repository root instead puts the third-party
+#       configure steps somewhere they hang: CMake's compiler probe under
+#       `CMakeScratch/TryCompile-*` never returns, and the build sits there until
+#       the job is killed. Every other target keeps the override.
+if [[ "${matrix[target]}" != 'win32' ]]; then
+    default_env+=(OUTPUT_DIR=build)
+fi
 if [[ "${matrix[target]}" == 'macos' ]]; then
     default_env+=(MACOSX_DEPLOYMENT_TARGET="${matrix[macosx_deployment_target]}")
 fi
