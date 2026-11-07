@@ -229,11 +229,14 @@ win32: # {{{
     #       `build_matrix.yml` uses `matrix.image != ''` to decide whether to
     #       wrap the command in `kodev docker`, and this target needs an MSYS2
     #       host rather than the Linux images the other jobs use.
-    # NOTE: `windows-latest`, the same label `windows.yml` uses, rather than a
-    #       pinned `windows-2025`: that workflow is the one configuration here
-    #       known to build this target end to end, so matching it removes one
-    #       variable from a comparison that has otherwise kept failing.
-    runs-on: windows-latest
+    # NOTE: `windows-2022`, pinned rather than `windows-latest`. The 2025 image
+    #       update to `20261103.298` broke this build: CMake's compiler probe
+    #       (a `cmake -G Ninja -S .../thirdparty/libarchive/source/` child inside
+    #       `CMakeScratch/TryCompile-*`) never returns, and the job then sits
+    #       until its timeout with every other project already installed. The
+    #       same commit built here in twenty-one minutes on image `20261021.278`,
+    #       so it is the image rather than this tree.
+    runs-on: windows-2022
     target: win32
     # MSYS2's own packages, installed by `msys2/setup-msys2` before the build.
     #

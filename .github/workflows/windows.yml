@@ -26,7 +26,17 @@ jobs:
 
   build:
 
-    runs-on: windows-latest
+    # NOTE: pinned to `windows-2022`, not `windows-latest`. The 2025 image was
+    #       updated to `20261103.298` and this build started hanging in CMake's
+    #       compiler probe: a `cmake -G Ninja -S .../libarchive/source/` child
+    #       stays alive inside `CMakeScratch/TryCompile-*` until the job is
+    #       killed, while every other step of the build is finished. The last
+    #       green run here was on image `20261021.278`, and the same commit
+    #       produced both, so it is the image rather than the code.
+    #
+    #       `windows-2022` is the older image that is still supported; pinning it
+    #       keeps the target buildable until the 2025 regression is understood.
+    runs-on: windows-2022
 
     steps:
 
