@@ -360,23 +360,24 @@ jobs:
           heartbeat=$!
           trap 'kill "${heartbeat}" 2>/dev/null || true' EXIT
 
-          # NOTE: `NINJAFLAGS=-j4` rather than `make -j4`. `make -j4` stands up a
-          #       jobserver (`--jobserver-auth=3,4`) on a pipe, and the configure
-          #       steps here spawn `cmake`, which in turn spawns compiler probes.
-          #       Under MSYS2 those children do not inherit the pipe the jobserver
-          #       writes tokens to, and a probe then waits forever for a token
-          #       nobody will send. `make` says as much itself, further in:
-          #       `warning: jobserver unavailable: using -j1`.
+          # NOTE: `-j1` *and* `NINJAFLAGS=-j4`, together. Either alone is wrong.
           #
-          #       That is the hang, and it is why the log stops right after
-          #       `-- Looking for iconv in iconv.h` with a `cmake` alive: the
-          #       first configure-time probe is where a token first has to be
-          #       taken. Leaving `make` serial and handing the width to ninja
-          #       avoids the case entirely -- `base/Makefile.defs` only omits `-j`
-          #       from `NINJAFLAGS` because make 4.4 and ninja 1.13 are both
-          #       present, which is exactly the assumption that does not hold
-          #       here.
-          make TARGET=win32 base NINJAFLAGS=-j4
+          #       `make -jN` (N > 1) stands up a jobserver on a pipe
+          #       (`--jobserver-auth=3,4`), and the configure steps here spawn
+          #       `cmake`, which spawns compiler probes. Under MSYS2 those
+          #       children do not inherit the pipe, and a probe waits forever for
+          #       a token nobody will send. That is the hang: the log stops at
+          #       `-- Detecting C compiler ABI info` -- the first probe -- with a
+          #       `cmake` alive and no further output until the job is killed.
+          #       `make` says as much itself: `warning: jobserver unavailable:
+          #       using -j1`.
+          #
+          #       `-j1` alone would fix the hang but also serialise ninja, because
+          #       `base/Makefile.defs` derives `PARALLEL_JOBS` from
+          #       `$(ALLOCATED_CORES)` and passes it down. Overriding
+          #       `NINJAFLAGS` restores the parallelism at the level that does
+          #       the compiling, which is where the time goes.
+          make TARGET=win32 base -j1 NINJAFLAGS=-j4
 
       - name: Dump build timings
         # NOTE: `steps.build` is the non-Windows step, so on that target this
