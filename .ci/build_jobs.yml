@@ -276,6 +276,12 @@ win32: # {{{
     # `Install` and `Generate artifacts` steps are gated on it), which is the
     # point of building this target in CI at all: the artifact is the deliverable.
     artifacts: true
+    # NOTE: off, because there is nothing here to check: the step runs
+    #       `make ffi`, and this target's build has no `ffi` goal at all --
+    #       `ninja: error: unknown target 'ffi', did you mean 'fbink'?`. The
+    #       generated cdecls in `base/ffi` are shared with the other targets, and
+    #       those check them.
+    check_ffi_cdecls: false
     # The spec runner here is a stand-in for busted (`tools/win32/run_specs.sh`),
     # and the suite is not fully green on this target yet; `windows.yml` reports
     # it without failing. Not requested, so `Test` is skipped -- it also needs
