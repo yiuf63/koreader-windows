@@ -70,14 +70,13 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
-          path-type: inherit
-          cache: false
           update: false
           # The default `path-type: strict` *replaces* PATH inside the MSYS shell
           # with MSYS2's own, which discards anything added through GITHUB_PATH —
           # leaving /mingw64/bin unreachable and the compiler "not found".
           # `inherit` keeps the converted Windows PATH.
           path-type: inherit
+          cache: false
           # Packages are installed in the next step instead: the action's
           # `install:` runs pacman in a way whose output is not always captured,
           # and when it fails the workflow only reports a missing compiler much
