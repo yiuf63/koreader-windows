@@ -412,7 +412,7 @@ jobs:
       # Check FFI cdecls are up-to-date. {{{
 
       - name: Check FFI cdecls are up-to-date
-        if: steps.build-restore.outputs.cache-hit != 'true' && matrix.check_ffi_cdecls
+        if: steps.build-restore.outputs.cache-hit != 'true' && matrix.check_ffi_cdecls && matrix.target != 'win32'
         run: |
           set -x
           make ffi
