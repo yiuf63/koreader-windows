@@ -44,9 +44,8 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
-          path-type: inherit
-          cache: false
           update: false
+          cache: false
           # The default `path-type: strict` *replaces* PATH inside the MSYS
           # shell with MSYS2's own, which discards anything added through
           # GITHUB_PATH — leaving /mingw64/bin unreachable and the compiler
