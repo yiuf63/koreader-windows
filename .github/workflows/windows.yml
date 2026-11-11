@@ -116,6 +116,7 @@ jobs:
           x86_64-w64-mingw32-gcc --version | head -1
 
       - name: Build
+        timeout-minutes: 120
         # `USE_NO_CCACHE=1`: the runner ships Strawberry Perl's ccache, which the
         # build picks up via `command -v ccache`. Its path is a Windows one
         # (`C:\Strawberry\c\bin\ccache`), and passing that through the MSYS shell
