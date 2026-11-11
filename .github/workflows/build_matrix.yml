@@ -69,7 +69,9 @@ jobs:
         if: runner.os == 'Windows'
         uses: msys2/setup-msys2@v2
         with:
-          msystem: MSYS
+          msystem: MINGW64
+          path-type: inherit
+          cache: false
           update: false
           # The default `path-type: strict` *replaces* PATH inside the MSYS shell
           # with MSYS2's own, which discards anything added through GITHUB_PATH —
