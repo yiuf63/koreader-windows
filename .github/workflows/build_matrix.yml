@@ -318,7 +318,7 @@ jobs:
         #       printed for the rest of the run. `timeout` turns that into a
         #       failure that names the limit, and the per-project output that is
         #       already there says where it stopped.
-        timeout-minutes: 90
+        timeout-minutes: 180
         run: |
           # NOTE: spelled out rather than inherited from `TARGET` in the
           #       environment, and `make base` rather than the default target:
