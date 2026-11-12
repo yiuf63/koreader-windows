@@ -387,6 +387,8 @@ end
 local Kindle = Generic:extend{
     model = "Kindle",
     isKindle = yes,
+    -- The uevent listener in input-kindle.h generates EvdevInputInsert/Remove events for UHID devices
+    supportsExternalKeyboard = yes,
     -- NOTE: We can cheat by adding a platform-specific entry here, because the only code that will check for this is here.
     isSpecialOffers = isSpecialOffers(),
     hasOTAUpdates = yes,
@@ -1217,6 +1219,7 @@ local KindleColorSoft = Kindle:extend{
     canHWDither = yes,
     canDoSwipeAnimation = yes,
     hasColorScreen = yes,
+    hasKaleidoWfm = yes,
 }
 
 local KindleScribeColorSoft = Kindle:extend{
@@ -1236,6 +1239,7 @@ local KindleScribeColorSoft = Kindle:extend{
     canHWDither = yes,
     canDoSwipeAnimation = yes,
     hasColorScreen = yes,
+    hasKaleidoWfm = yes,
 }
 
 function Kindle2:init()
@@ -2150,7 +2154,8 @@ local pw5_set = Set { "1Q0", "1PX", "1VD", "21A", "2BJ", "2DK" }
 local pw5se_set = Set { "1LG", "219", "2BH" }
 local kt5_set = Set { "22D", "25T", "23A", "2AQ", "2AP", "1XH", "22C" }
 local ks_set = Set { "27J", "2BL", "263", "227", "2BM", "23L", "23M", "270" }
-local kcs_set = Set { "3H2", "3H4", "3H6", "3H7", "3H9", "3JT", "3J6", "455", "456", "4EP", "34X", "3HB" }
+local kcs_set = Set { "3H2", "3H4", "3H6", "3H7", "3H9", "3JT", "3J6", "455", "456", "4EP", "34X", "3HB",
+                  "5R6", "5R7", "5R8", "5R9", "5RA", "5RB", "65R", "65S", "65T" } -- ColorSoft 2 (Platjp5)
 local kt6_set = Set { "A89", "3L2", "3L3", "3L4", "3L5", "3L6", "3KM" }
 local pw6_set = Set { "33W", "33X", "346", "349", "3H3", "3H5", "3H8", "3HA", "3J5", "3JS" } --- some of these are probably SE :/
 local ks2_set = Set { "3V0", "3V1", "3X5", "3UV", "3X4", "3X3", "41E", "410" }

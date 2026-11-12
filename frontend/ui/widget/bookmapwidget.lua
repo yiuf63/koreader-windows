@@ -690,9 +690,7 @@ local BookMapWidget = FocusManager:extend{
 }
 
 function BookMapWidget:init()
-    -- On touch devices (with keys), we don't really need to navigate focus with keys,
-    -- so we should avoid allocating memory to huge data structures.
-    self.enable_focus_navigation = not Device:isTouchDevice() and Device:hasDPad() and Device:useDPadAsActionKeys()
+    self.enable_focus_navigation = Device:hasDPad() and Device:useDPadAsActionKeys()
 
     if self.ui.view:shouldInvertBiDiLayoutMirroring() then
         BD.invert()
@@ -884,10 +882,10 @@ end
 
 function BookMapWidget:registerKeyEvents()
     if Device:hasKeys() then
-        if Device:isTouchDevice() then
+        if Device:hasDPad() and not Device:useDPadAsActionKeys() then
             -- Remove key handling by FocusManager (there is no ordering/priority
             -- handling for key_events, unlike with touch zones)
-            self.key_events = {}
+            self:releaseFocusKeys("FocusLeft", "FocusRight", "FocusUp", "FocusDown", "Press")
             self.key_events.ScrollRowUp = { { "Up" } }
             self.key_events.ScrollRowDown = { { "Down" } }
         elseif Device:hasScreenKB() or Device:hasKeyboard() then
@@ -1391,6 +1389,7 @@ function BookMapWidget:onShowBookMapMenu()
         {
             {
                 text = _("Chapter levels"),
+                focusable = false,
                 callback = function() end,
                 align = "left",
             },
@@ -1418,6 +1417,7 @@ function BookMapWidget:onShowBookMapMenu()
         not self.overview_mode and {
             {
                 text = _("Page-slot width"),
+                focusable = false,
                 callback = function() end,
                 align = "left",
                 -- Below, minus increases page per row and plus decreases it.
@@ -1457,6 +1457,7 @@ function BookMapWidget:onShowBookMapMenu()
         {
             {
                 text = _("10-page markers"),
+                focusable = false,
                 callback = function() end,
                 align = "left",
             },

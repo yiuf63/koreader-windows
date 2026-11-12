@@ -1,5 +1,10 @@
-local DataStorage = require("datastorage")
 local Device = require("device")
+
+if not (Device:hasScreenKB() or Device:hasKeyboard() or Device:supportsExternalKeyboard()) then
+    return { disabled = true, }
+end
+
+local DataStorage = require("datastorage")
 local Dispatcher = require("dispatcher")
 local InputContainer = require("ui/widget/container/inputcontainer")
 local Gamepad = require("device/sdl/gamepad")
@@ -10,10 +15,6 @@ local logger = require("logger")
 local util = require("util")
 local T = ffiUtil.template
 local _ = require("gettext")
-
-if not (Device:hasScreenKB() or Device:hasKeyboard()) then
-    return { disabled = true, }
-end
 
 local HotKeys = InputContainer:extend{
     name = "hotkeys",
@@ -113,10 +114,7 @@ if Device:hasScreenKB() or Device:hasKeyboard() then
 end
 
 function HotKeys:init()
-    if not (Device:hasScreenKB() or Device:hasKeyboard()) then
-        self:disableHotkeys() -- clear all on keyboard disconnection
-        return
-    end
+    if not (Device:hasScreenKB() or Device:hasKeyboard()) then return end
     local defaults_path = ffiUtil.joinPath(self.path, "defaults.lua")
     self.is_docless = self.ui == nil or self.ui.document == nil
     self.hotkey_mode = self.is_docless and "hotkeys_fm" or "hotkeys_reader"
@@ -145,6 +143,7 @@ function HotKeys:init()
     self:registerDispatcherActions()
     self:registerKeyEvents()
 end
+
 function HotKeys:registerDispatcherActions()
     if not Device:supportsGamepad() then return end --- @todo Are we sure this should be gated? It seems generically useful.
     for action_name, action in pairs(key_emitter_actions) do
@@ -279,9 +278,16 @@ end -- registerKeyEvents()
 function HotKeys:onPhysicalKeyboardConnected()
     buildHotkeysList()
     self:init()
-    logger.dbg("HotKeys plugin reinit successfully after physical keyboard (dis)connection.")
+    logger.dbg("HotKeys plugin initialised successfully after external keyboard connection.")
 end
-HotKeys.onPhysicalKeyboardDisconnected = HotKeys.onPhysicalKeyboardConnected
+
+function HotKeys:onPhysicalKeyboardDisconnected()
+    -- there might be multiple external keyboards connected
+    if not (Device:hasScreenKB() or Device:hasKeyboard()) then
+        self:disableHotkeys()
+        logger.dbg("HotKeys plugin shutting down after external keyboard disconnection.")
+    end
+end
 
 function HotKeys:disableHotkeys()
     self.key_events = {}
