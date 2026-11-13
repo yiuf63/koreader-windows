@@ -141,7 +141,7 @@ local Device = {
     last_suspend_time = 0,
     canReboot = no,
     canPowerOff = no,
-    canAssociateFileExtensions = no,
+    canAssociateFileExtensions = (jit.os == "Windows"),
 
     -- Start and stop text input mode (e.g. open soft keyboard, etc)
     startTextInput = function() end,
@@ -552,6 +552,35 @@ function Device:setAutoStandby(isAllowed) end
 
 -- Hardware specific method to set OS-level file associations to launch koreader. Expects boolean map.
 function Device:associateFileExtensions(exts)
+    if jit.os == "Windows" then
+        local FileAssociations = require("device/windows/file_associations")
+
+        -- exts is a map {".epub" = provider, ...}
+        -- Collect extensions to register
+        local extensions_to_register = {}
+        for ext, _ in pairs(exts) do
+            table.insert(extensions_to_register, ext)
+        end
+
+        if #extensions_to_register == 0 then
+            -- Empty means unregister all
+            logger.info("Unregistering all file associations")
+            return FileAssociations:unregisterAllExtensions()
+        else
+            -- Register selected extensions
+            logger.info("Registering", #extensions_to_register, "file associations")
+            local success_count = 0
+            for _, ext in ipairs(extensions_to_register) do
+                local ok = FileAssociations:registerExtension(ext)
+                if ok then
+                    success_count = success_count + 1
+                end
+            end
+            logger.info("Successfully registered", success_count, "/", #extensions_to_register, "associations")
+            return success_count
+        end
+    end
+
     logger.dbg("Device:associateFileExtensions():", util.tableSize(exts), "entries, OS handler missing")
 end
 
