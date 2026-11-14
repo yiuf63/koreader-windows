@@ -57,7 +57,7 @@ i18n
 # Personal helper scripts (MSYS2 launchers, environment checks, stray-directory
 # cleanups). They hardcode one machine's paths, so they do not belong in the tree.
 /*.ps1
-/build_win32_local.sh
+/build_win32*.sh
 
 /*.app
 /.cproject
