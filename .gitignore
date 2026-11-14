@@ -54,6 +54,11 @@ i18n
 # Local screenshots taken while checking the Windows build by hand.
 /screenshots-win32/
 
+# Personal helper scripts (MSYS2 launchers, environment checks, stray-directory
+# cleanups). They hardcode one machine's paths, so they do not belong in the tree.
+/*.ps1
+/build_win32_local.sh
+
 /*.app
 /.cproject
 /.project
