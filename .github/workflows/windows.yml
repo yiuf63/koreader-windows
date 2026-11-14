@@ -129,22 +129,40 @@ jobs:
         # `make -jN` (N > 1) stands up a jobserver on a pipe
         # (`--jobserver-auth=3,4`), and the configure steps here spawn `cmake`,
         # which spawns compiler probes; under MSYS2 those children do not inherit
-        # the pipe, so a probe waits forever for a token nobody sends. The log
-        # stops at `-- Detecting C compiler ABI info` -- the first probe -- with a
-        # `cmake` alive until the job is killed, and `make` itself warns
-        # `jobserver unavailable: using -j1`.
+        # the pipe, so a probe waits forever for a token nobody sends. `make`
+        # itself warns `jobserver unavailable: using -j1`.
         #
         # `-j1` alone fixes that but also serialises ninja, because
         # `base/Makefile.defs` derives `PARALLEL_JOBS` from `$(ALLOCATED_CORES)`
         # and passes it down. `NINJAFLAGS` puts the parallelism back where the
         # compiling happens. Four jobs, not `$(nproc)`: crengine has translation
         # units that each peak near 1GB, so eight at once exhausts the runner.
+        #
+        # The attempt loop is for a separate, intermittent failure: the
+        # top-level `cmake` occasionally stops dead on these runners, right after
+        # `-- Detecting CXX compiler ABI info`, with a live `cmake` child and no
+        # further output until the step is killed. It is not in this tree -- the
+        # same commit configures *and* compiles in eighteen minutes on the same
+        # runner image in the other workflow, and configures in three seconds
+        # locally. `timeout` bounds one attempt so the retry actually runs;
+        # without it the first hang would consume the whole step budget.
         run: |
           set -x
           # The build writes MSYS paths into koreader_vars.cmake, so the MSYS
           # cmake has to be the one that runs.
           which cmake
-          make TARGET=win32 -j1 NINJAFLAGS=-j4 USE_NO_CCACHE=1
+          for attempt in 1 2; do
+            echo "=== build attempt ${attempt}/2 ==="
+            if timeout --signal=TERM 3600 \
+                 make TARGET=win32 -j1 NINJAFLAGS=-j4 USE_NO_CCACHE=1; then
+              break
+            fi
+            if [ "${attempt}" = 2 ]; then
+              echo "build failed twice; giving up" >&2
+              exit 1
+            fi
+            echo "attempt ${attempt} did not finish; retrying" >&2
+          done
           grep -m1 CMAKE_COMMAND:INTERNAL \
             base/build/x86_64-w64-mingw32/cmake/CMakeCache.txt || true
 

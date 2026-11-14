@@ -377,7 +377,25 @@ jobs:
           #       `$(ALLOCATED_CORES)` and passes it down. Overriding
           #       `NINJAFLAGS` restores the parallelism at the level that does
           #       the compiling, which is where the time goes.
-          make TARGET=win32 base -j1 NINJAFLAGS=-j4
+          #
+          #       The attempt loop covers a separate, intermittent stall: the
+          #       top-level `cmake` sometimes stops dead on these runners with a
+          #       live child and no output. It is not in this tree -- the same
+          #       commit configures and compiles in eighteen minutes on the same
+          #       runner image in `windows.yml`, and configures in three seconds
+          #       locally. `timeout` bounds one attempt so the retry can run.
+          for attempt in 1 2; do
+            echo "=== build attempt ${attempt}/2 ==="
+            if timeout --signal=TERM 3600 \
+                 make TARGET=win32 base -j1 NINJAFLAGS=-j4; then
+              break
+            fi
+            if [ "${attempt}" = 2 ]; then
+              echo "build failed twice; giving up" >&2
+              exit 1
+            fi
+            echo "attempt ${attempt} did not finish; retrying" >&2
+          done
 
       - name: Dump build timings
         # NOTE: `steps.build` is the non-Windows step, so on that target this
