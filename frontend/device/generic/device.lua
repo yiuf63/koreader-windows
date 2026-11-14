@@ -555,30 +555,40 @@ function Device:associateFileExtensions(exts)
     if jit.os == "Windows" then
         local FileAssociations = require("device/windows/file_associations")
 
-        -- exts is a map {".epub" = provider, ...}
-        -- Collect extensions to register
-        local extensions_to_register = {}
-        for ext, _ in pairs(exts) do
-            table.insert(extensions_to_register, ext)
+        -- `exts` is keyed by extension name and holds the ones the user wants
+        -- associated. It is derived from `DocumentRegistry`, so it is the
+        -- authority on which extensions this build can actually open -- there is
+        -- no fixed list to walk in parallel.
+        --
+        -- Registering is not enough: anything registered earlier but absent now
+        -- has to go, or unticking a box leaves the association behind.
+        local registered = 0
+        for ext in pairs(exts) do
+            if FileAssociations:registerExtension(ext) then
+                registered = registered + 1
+            end
         end
 
-        if #extensions_to_register == 0 then
-            -- Empty means unregister all
-            logger.info("Unregistering all file associations")
-            return FileAssociations:unregisterAllExtensions()
-        else
-            -- Register selected extensions
-            logger.info("Registering", #extensions_to_register, "file associations")
-            local success_count = 0
-            for _, ext in ipairs(extensions_to_register) do
-                local ok = FileAssociations:registerExtension(ext)
-                if ok then
-                    success_count = success_count + 1
+        -- Removal is driven by what is actually in the registry, not by a list of
+        -- candidates, so an extension dropped from a newer build is cleaned up
+        -- too.
+        local removed = 0
+        for _, ext in ipairs(FileAssociations:listRegisteredExtensions()) do
+            if not exts[ext] then
+                if FileAssociations:unregisterExtension(ext) then
+                    removed = removed + 1
                 end
             end
-            logger.info("Successfully registered", success_count, "/", #extensions_to_register, "associations")
-            return success_count
         end
+
+        -- Both directions change what the shell shows, so either needs the
+        -- notification.
+        if registered > 0 or removed > 0 then
+            FileAssociations:notifyShell()
+        end
+
+        logger.info("File associations:", registered, "registered,", removed, "removed")
+        return registered
     end
 
     logger.dbg("Device:associateFileExtensions():", util.tableSize(exts), "entries, OS handler missing")
