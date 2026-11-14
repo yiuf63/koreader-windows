@@ -116,7 +116,7 @@ jobs:
           x86_64-w64-mingw32-gcc --version | head -1
 
       - name: Build
-        timeout-minutes: 120
+        timeout-minutes: 180
         # `USE_NO_CCACHE=1`: the runner ships Strawberry Perl's ccache, which the
         # build picks up via `command -v ccache`. Its path is a Windows one
         # (`C:\Strawberry\c\bin\ccache`), and passing that through the MSYS shell
@@ -124,45 +124,35 @@ jobs:
         # compiler probe with "CreateProcess failed: The system cannot find the
         # file specified." There is no ccache here to benefit from anyway.
         #
-        # `-j1` *and* `NINJAFLAGS=-j4`, together. Either alone is wrong.
+        # `-j1` on *both* make and ninja, and that is not a typo for speed's
+        # sake. Two separate deadlocks live in the parallel path here, and both
+        # reproduce locally, which is how they were pinned down:
         #
-        # `make -jN` (N > 1) stands up a jobserver on a pipe
-        # (`--jobserver-auth=3,4`), and the configure steps here spawn `cmake`,
-        # which spawns compiler probes; under MSYS2 those children do not inherit
-        # the pipe, so a probe waits forever for a token nobody sends. `make`
-        # itself warns `jobserver unavailable: using -j1`.
+        #   * `make -jN` (N > 1) stands up a jobserver on a pipe
+        #     (`--jobserver-auth=3,4`). The configure steps spawn `cmake`, which
+        #     spawns compiler probes, and under MSYS2 those children do not
+        #     inherit the pipe -- so a probe waits for a token nobody sends.
+        #     `make` says so itself: `jobserver unavailable: using -j1`.
         #
-        # `-j1` alone fixes that but also serialises ninja, because
-        # `base/Makefile.defs` derives `PARALLEL_JOBS` from `$(ALLOCATED_CORES)`
-        # and passes it down. `NINJAFLAGS` puts the parallelism back where the
-        # compiling happens. Four jobs, not `$(nproc)`: crengine has translation
-        # units that each peak near 1GB, so eight at once exhausts the runner.
+        #   * `ninja -jN` runs several `thirdparty/*/configure` steps at once.
+        #     Each of those starts its own `cmake` compiler probe, and on MSYS2
+        #     they deadlock against each other: the log stops at
+        #     `-- Detecting CXX compiler ABI info` (or at `libarchive`'s
+        #     configure) with those `cmake` processes alive and no further output.
+        #     Reproduced here by rebuilding one target: `ninja -j4 libarchive`
+        #     stalls at the configure step, `ninja -j1 libarchive` completes it
+        #     and builds to 100%.
         #
-        # The attempt loop is for a separate, intermittent failure: the
-        # top-level `cmake` occasionally stops dead on these runners, right after
-        # `-- Detecting CXX compiler ABI info`, with a live `cmake` child and no
-        # further output until the step is killed. It is not in this tree -- the
-        # same commit configures *and* compiles in eighteen minutes on the same
-        # runner image in the other workflow, and configures in three seconds
-        # locally. `timeout` bounds one attempt so the retry actually runs;
-        # without it the first hang would consume the whole step budget.
+        # Hence `NINJAFLAGS=-j1`: the deadlock is in the configure phase, and it
+        # does not care how many cores there are. Parallel compiles would be
+        # faster, but a build that finishes beats one that hangs -- the earlier
+        # runs on `-j4` never got past the third-party libraries at all.
         run: |
           set -x
           # The build writes MSYS paths into koreader_vars.cmake, so the MSYS
           # cmake has to be the one that runs.
           which cmake
-          for attempt in 1 2; do
-            echo "=== build attempt ${attempt}/2 ==="
-            if timeout --signal=TERM 3600 \
-                 make TARGET=win32 -j1 NINJAFLAGS=-j4 USE_NO_CCACHE=1; then
-              break
-            fi
-            if [ "${attempt}" = 2 ]; then
-              echo "build failed twice; giving up" >&2
-              exit 1
-            fi
-            echo "attempt ${attempt} did not finish; retrying" >&2
-          done
+          make TARGET=win32 -j1 NINJAFLAGS=-j1 USE_NO_CCACHE=1
           grep -m1 CMAKE_COMMAND:INTERNAL \
             base/build/x86_64-w64-mingw32/cmake/CMakeCache.txt || true
 

@@ -311,13 +311,10 @@ jobs:
       - name: Build (Windows)
         id: build-win32
         if: steps.build-restore.outputs.cache-hit != 'true' && matrix.target == 'win32'
-        # NOTE: bounded, unlike the other targets. A stalled sub-process on this
-        #       platform otherwise sits until GitHub's six-hour job limit, and the
-        #       log stops dead with no indication of which project hung -- that is
-        #       what happened at sqlite's install step, after which nothing was
-        #       printed for the rest of the run. `timeout` turns that into a
-        #       failure that names the limit, and the per-project output that is
-        #       already there says where it stopped.
+        # NOTE: 180 minutes, because the build runs serialised (see below) and
+        #       that costs roughly 3-4x versus `-j4`. It is still a bound rather
+        #       than the old six-hour job limit, so a stall fails here and names
+        #       the step instead of being killed at the very end.
         timeout-minutes: 180
         run: |
           # NOTE: spelled out rather than inherited from `TARGET` in the
@@ -360,42 +357,34 @@ jobs:
           heartbeat=$!
           trap 'kill "${heartbeat}" 2>/dev/null || true' EXIT
 
-          # NOTE: `-j1` *and* `NINJAFLAGS=-j4`, together. Either alone is wrong.
+          # NOTE: `-j1` on *both* make and ninja, and that is not a typo for
+          #       speed's sake. Two separate deadlocks live in the parallel path
+          #       here, and both reproduce locally, which is how they were pinned
+          #       down:
           #
-          #       `make -jN` (N > 1) stands up a jobserver on a pipe
-          #       (`--jobserver-auth=3,4`), and the configure steps here spawn
-          #       `cmake`, which spawns compiler probes. Under MSYS2 those
-          #       children do not inherit the pipe, and a probe waits forever for
-          #       a token nobody will send. That is the hang: the log stops at
-          #       `-- Detecting C compiler ABI info` -- the first probe -- with a
-          #       `cmake` alive and no further output until the job is killed.
-          #       `make` says as much itself: `warning: jobserver unavailable:
-          #       using -j1`.
+          #         * `make -jN` (N > 1) stands up a jobserver on a pipe
+          #           (`--jobserver-auth=3,4`). The configure steps spawn `cmake`,
+          #           which spawns compiler probes, and under MSYS2 those children
+          #           do not inherit the pipe -- so a probe waits for a token
+          #           nobody sends. `make` says so itself: `warning: jobserver
+          #           unavailable: using -j1`.
           #
-          #       `-j1` alone would fix the hang but also serialise ninja, because
-          #       `base/Makefile.defs` derives `PARALLEL_JOBS` from
-          #       `$(ALLOCATED_CORES)` and passes it down. Overriding
-          #       `NINJAFLAGS` restores the parallelism at the level that does
-          #       the compiling, which is where the time goes.
+          #         * `ninja -jN` runs several `thirdparty/*/configure` steps at
+          #           once. Each starts its own `cmake` compiler probe, and on
+          #           MSYS2 they deadlock against each other: the log stops at
+          #           `-- Detecting CXX compiler ABI info` (or in `libarchive`'s
+          #           configure) with those `cmake` processes alive and no further
+          #           output until the job is killed. Reproduced by rebuilding a
+          #           single target: `ninja -j4 libarchive` stalls at its
+          #           configure step, `ninja -j1 libarchive` completes it and
+          #           builds to 100%.
           #
-          #       The attempt loop covers a separate, intermittent stall: the
-          #       top-level `cmake` sometimes stops dead on these runners with a
-          #       live child and no output. It is not in this tree -- the same
-          #       commit configures and compiles in eighteen minutes on the same
-          #       runner image in `windows.yml`, and configures in three seconds
-          #       locally. `timeout` bounds one attempt so the retry can run.
-          for attempt in 1 2; do
-            echo "=== build attempt ${attempt}/2 ==="
-            if timeout --signal=TERM 3600 \
-                 make TARGET=win32 base -j1 NINJAFLAGS=-j4; then
-              break
-            fi
-            if [ "${attempt}" = 2 ]; then
-              echo "build failed twice; giving up" >&2
-              exit 1
-            fi
-            echo "attempt ${attempt} did not finish; retrying" >&2
-          done
+          #       Hence `NINJAFLAGS=-j1`. The deadlock is in the configure phase
+          #       and does not care how many cores there are. Parallel compiles
+          #       would be faster, but a build that finishes beats one that
+          #       hangs -- the `-j4` runs never got past the third-party
+          #       libraries at all.
+          make TARGET=win32 base -j1 NINJAFLAGS=-j1
 
       - name: Dump build timings
         # NOTE: `steps.build` is the non-Windows step, so on that target this
