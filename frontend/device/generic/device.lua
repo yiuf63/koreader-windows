@@ -141,7 +141,10 @@ local Device = {
     last_suspend_time = 0,
     canReboot = no,
     canPowerOff = no,
-    canAssociateFileExtensions = (jit.os == "Windows"),
+    -- `yes`/`no`, not `true`/`false`: those are functions (see the definitions
+    -- above), and callers spell this `Device:canAssociateFileExtensions()`. The
+    -- Windows backend lives in `device/windows/file_associations`.
+    canAssociateFileExtensions = jit.os == "Windows" and yes or no,
 
     -- Start and stop text input mode (e.g. open soft keyboard, etc)
     startTextInput = function() end,
