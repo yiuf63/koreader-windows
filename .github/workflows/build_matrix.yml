@@ -384,10 +384,18 @@ jobs:
           #       commit configures and compiles in eighteen minutes on the same
           #       runner image in `windows.yml`, and configures in three seconds
           #       locally. `timeout` bounds one attempt so the retry can run.
+          #
+          #       `all`, not `base`: the binary checks below run against the
+          #       install tree (`koreader-win32-.../koreader/libs`), which only
+          #       `all` populates -- `base` stops at the libraries. Every other
+          #       target gets that tree from the `Install` step, but that one is
+          #       gated on `matrix.artifacts`, and `artifacts` is false for
+          #       `push`/`pull_request` (only `release` sets it). Hence doing the
+          #       install here, where the checks that need it live.
           for attempt in 1 2; do
             echo "=== build attempt ${attempt}/2 ==="
             if timeout --signal=TERM 3600 \
-                 make TARGET=win32 base -j1 NINJAFLAGS=-j4; then
+                 make TARGET=win32 -j1 NINJAFLAGS=-j4 all; then
               break
             fi
             if [ "${attempt}" = 2 ]; then
