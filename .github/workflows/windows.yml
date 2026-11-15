@@ -108,12 +108,21 @@ jobs:
           echo "PATH=/usr/bin:/mingw64/bin:/usr/local/bin:/bin:$PATH" >> "$env_file"
 
       - name: Compiler version
+        # NOTE: the package list, not only the `--version` lines. The build here
+        #       intermittently stops dead inside a `cmake` compiler probe, and it
+        #       does not reproduce on a machine whose MSYS2 packages are a few
+        #       revisions behind -- so the exact package revisions are the thing
+        #       worth recording in the log when comparing runs.
         run: |
           set -x
           which cmake ninja make
           cmake --version | head -1
           ninja --version
           x86_64-w64-mingw32-gcc --version | head -1
+          echo "=== MSYS2 package revisions ==="
+          pacman -Q | grep -E '^(gcc|cmake|ninja|make|binutils|msys2-runtime|bash|filesystem) ' || true
+          echo "=== mingw toolchain ==="
+          pacman -Q | grep -E '^mingw-w64-x86_64-(gcc|binutils|cmake|ninja|make|crt|headers|winpthreads|libwinpthread)' || true
 
       - name: Build
         timeout-minutes: 120

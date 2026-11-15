@@ -331,6 +331,15 @@ jobs:
           #       native cmake silently fails to resolve those.
           which cmake ninja make
 
+          # The build here intermittently stops dead inside a `cmake` compiler
+          # probe, and it does not reproduce on a machine whose MSYS2 packages are
+          # a few revisions behind. Recording the exact revisions is what makes
+          # two runs comparable after the fact.
+          echo "=== MSYS2 package revisions ==="
+          pacman -Q | grep -E '^(gcc|cmake|ninja|make|binutils|msys2-runtime|bash|filesystem) ' || true
+          echo "=== mingw toolchain ==="
+          pacman -Q | grep -E '^mingw-w64-x86_64-(gcc|binutils|cmake|ninja|make|crt|headers|winpthreads|libwinpthread)' || true
+
           # NOTE: `VERBOSE=1` does *not* help here, and it was worth learning why:
           #       ninja runs up to `-j4` edges at once and buffers each one's
           #       output, printing it only when that edge finishes. A command that
