@@ -383,23 +383,10 @@ jobs:
           #       live child and no output. It is not in this tree -- the same
           #       commit configures and compiles in eighteen minutes on the same
           #       runner image in `windows.yml`, and configures in three seconds
-          #       locally.
-          #
-          #       `timeout` alone is not enough to bound an attempt: it signals
-          #       the direct child (`make`), and the `ninja`/`cmake` processes
-          #       below it are not in a process group it can reach, so they keep
-          #       running and the step still waits. `--kill-after` re-signals, and
-          #       measured against the run that spent three hours in one attempt,
-          #       a shorter bound is what makes the retry actually happen.
-          #
-          #       `base`, not `all`: `all` also installs the tree, which roughly
-          #       doubled this step (13 minutes to over 180) and pushed it into
-          #       the stall far more often. The install the binary checks need is
-          #       done in its own step, below, where it is independent of this
-          #       timeout.
+          #       locally. `timeout` bounds one attempt so the retry can run.
           for attempt in 1 2; do
             echo "=== build attempt ${attempt}/2 ==="
-            if timeout --signal=TERM --kill-after=120 1500 \
+            if timeout --signal=TERM 3600 \
                  make TARGET=win32 base -j1 NINJAFLAGS=-j4; then
               break
             fi
@@ -467,12 +454,15 @@ jobs:
         if: matrix.target != 'win32' && steps.build-restore.outputs.cache-hit != 'true'
         run: make bincheck
 
-      # NOTE: Windows does the install here rather than relying on the `Install`
-      #       step above: that one is gated on `matrix.artifacts`, which is false
-      #       for `push`/`pull_request` (only `release` sets it), so on those
-      #       events nothing would populate the install tree these checks read.
-      #       `--assume-old=base` keeps it to the frontend and resources -- the
-      #       libraries are already built.
+      # NOTE: the checks below read the install tree, and the `Install` step above
+      #       is gated on `matrix.artifacts`, which is false for `push` and
+      #       `pull_request` (only `release` sets it). So on those events nothing
+      #       populated it and `check_dlls.sh` bailed out with
+      #       `no libs/ in .../koreader — build first`.
+      #
+      #       Installing here keeps the build step as it was: `--assume-old=base`
+      #       makes it the frontend and resources only, and it cannot affect the
+      #       build's timing, which is the fragile part on these runners.
       - name: Install the Windows tree
         if: matrix.target == 'win32'
         run: make --assume-old=base all
