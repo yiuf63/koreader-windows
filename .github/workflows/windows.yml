@@ -158,12 +158,31 @@ jobs:
           # The build writes MSYS paths into koreader_vars.cmake, so the MSYS
           # cmake has to be the one that runs.
           which cmake
+
+          # NOTE: the stall this retries has a known shape now, reproduced on a
+          #       fresh MSYS2 with the same gcc: `cmake`'s `try_compile` step
+          #       forks, and the fork fails at `MEM_COMMIT` --
+          #       `fatal error in forked process - MEM_COMMIT failed, Win32 error
+          #       1455`, i.e. ERROR_COMMITMENT_LIMIT. CMake reports that as
+          #       "Failed to generate test project build system", and on paths
+          #       that do not check the result it is a wait that never ends.
+          #       So the record of free memory is worth having when it hangs.
+          #
+          #       `NINJAFLAGS=-j2`, not `-j4`: four concurrent translation units
+          #       is what makes the peak, and the peak is what runs out. If a
+          #       runner is under memory pressure from anything else, two is the
+          #       difference between compiling and not.
+          echo "=== memory before the build ==="
+          # MSYS2 has no `free`; /proc/meminfo is the one that exists.
+          head -5 /proc/meminfo || true
           for attempt in 1 2; do
             echo "=== build attempt ${attempt}/2 ==="
             if timeout --signal=TERM 3600 \
-                 make TARGET=win32 -j1 NINJAFLAGS=-j4 USE_NO_CCACHE=1; then
+                 make TARGET=win32 -j1 NINJAFLAGS=-j2 USE_NO_CCACHE=1; then
               break
             fi
+            echo "=== memory after attempt ${attempt} ==="
+            { free -m || cat /proc/meminfo | head -5; } || true
             if [ "${attempt}" = 2 ]; then
               echo "build failed twice; giving up" >&2
               exit 1

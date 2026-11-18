@@ -369,34 +369,35 @@ jobs:
           heartbeat=$!
           trap 'kill "${heartbeat}" 2>/dev/null || true' EXIT
 
-          # NOTE: `-j1` *and* `NINJAFLAGS=-j4`, together. Either alone is wrong.
+          # NOTE: `-j1` on `make`, `NINJAFLAGS` for the compile parallelism.
           #
           #       `make -jN` (N > 1) stands up a jobserver on a pipe
           #       (`--jobserver-auth=3,4`), and the configure steps here spawn
           #       `cmake`, which spawns compiler probes. Under MSYS2 those
-          #       children do not inherit the pipe, and a probe waits forever for
-          #       a token nobody will send. That is the hang: the log stops at
-          #       `-- Detecting C compiler ABI info` -- the first probe -- with a
-          #       `cmake` alive and no further output until the job is killed.
-          #       `make` says as much itself: `warning: jobserver unavailable:
-          #       using -j1`.
+          #       children do not inherit the pipe, and a probe waits for a token
+          #       nobody will send. `make` says as much itself: `warning:
+          #       jobserver unavailable: using -j1`.
           #
-          #       `-j1` alone would fix the hang but also serialise ninja, because
+          #       `-j1` alone would also serialise ninja, because
           #       `base/Makefile.defs` derives `PARALLEL_JOBS` from
-          #       `$(ALLOCATED_CORES)` and passes it down. Overriding
-          #       `NINJAFLAGS` restores the parallelism at the level that does
-          #       the compiling, which is where the time goes.
+          #       `$(ALLOCATED_CORES)` and passes it down. `NINJAFLAGS` puts the
+          #       parallelism back at the level that does the compiling.
           #
-          #       The attempt loop covers a separate, intermittent stall: the
-          #       top-level `cmake` sometimes stops dead on these runners with a
-          #       live child and no output. It is not in this tree -- the same
-          #       commit configures and compiles in eighteen minutes on the same
-          #       runner image in `windows.yml`, and configures in three seconds
-          #       locally. `timeout` bounds one attempt so the retry can run.
+          #       Two jobs, not four. The stall these runners hit is a fork that
+          #       fails at `MEM_COMMIT` -- `fatal error in forked process -
+          #       MEM_COMMIT failed, Win32 error 1455`, i.e.
+          #       ERROR_COMMITMENT_LIMIT -- which reproduces on a fresh MSYS2 with
+          #       the same gcc whenever the machine is short of memory, and does
+          #       not when it is not. Four concurrent translation units is what
+          #       sets the peak; two keeps it reachable. `free` is printed before
+          #       each attempt so a future hang has the number next to it.
+          echo "=== memory before the build ==="
+          # MSYS2 has no `free`; /proc/meminfo is the one that exists.
+          head -5 /proc/meminfo || true
           for attempt in 1 2; do
             echo "=== build attempt ${attempt}/2 ==="
             if timeout --signal=TERM 3600 \
-                 make TARGET=win32 base -j1 NINJAFLAGS=-j4; then
+                 make TARGET=win32 base -j1 NINJAFLAGS=-j2; then
               break
             fi
             if [ "${attempt}" = 2 ]; then
