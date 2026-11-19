@@ -402,9 +402,36 @@ jobs:
           echo "=== memory before the build ==="
           # MSYS2 has no `free`; /proc/meminfo is the one that exists.
           head -5 /proc/meminfo || true
+
+          # Run one attempt, killing the *whole process group* when it is out of
+          # time.
+          #
+          # `timeout(1)` alone does not: it signals its direct child, and this
+          # build's children are `make` -> `ninja` -> `cc1plus`/`cmake`. The first
+          # attempt's `timeout` fired and left the ninja and compiler processes
+          # alive, so the second `make` inherited a half-built directory and
+          # blocked behind them. Reproduced: `timeout --signal=TERM 3 bash -c
+          # 'sleep 300 & wait'` returns but leaves `sleep` running; `setsid` plus
+          # `kill -- -PID` takes the group with it.
+          run_attempt() {
+            limit=$1; shift
+            setsid "$@" &
+            local pgid=$!
+            (
+              sleep "${limit}"
+              kill -TERM -- "-${pgid}" 2>/dev/null || true
+              sleep 5
+              kill -KILL -- "-${pgid}" 2>/dev/null || true
+            ) &
+            local watcher=$!
+            wait "${pgid}"; local rc=$?
+            kill "${watcher}" 2>/dev/null || true
+            return "${rc}"
+          }
+
           for attempt in 1 2; do
             echo "=== build attempt ${attempt}/2 ==="
-            if timeout --signal=TERM 3600 \
+            if run_attempt 3600 \
                  make TARGET=win32 base -j1 NINJAFLAGS=-j2; then
               break
             fi
