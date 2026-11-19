@@ -159,30 +159,49 @@ jobs:
           # cmake has to be the one that runs.
           which cmake
 
-          # NOTE: the stall this retries has a known shape now, reproduced on a
-          #       fresh MSYS2 with the same gcc: `cmake`'s `try_compile` step
-          #       forks, and the fork fails at `MEM_COMMIT` --
-          #       `fatal error in forked process - MEM_COMMIT failed, Win32 error
-          #       1455`, i.e. ERROR_COMMITMENT_LIMIT. CMake reports that as
-          #       "Failed to generate test project build system", and on paths
-          #       that do not check the result it is a wait that never ends.
-          #       So the record of free memory is worth having when it hangs.
-          #
-          #       `NINJAFLAGS=-j2`, not `-j4`: four concurrent translation units
-          #       is what makes the peak, and the peak is what runs out. If a
-          #       runner is under memory pressure from anything else, two is the
-          #       difference between compiling and not.
+          # NOTE: `NINJAFLAGS=-j2`, not `-j4`: four concurrent translation units
+          #       is what sets the resource peak, and the peak is when the build
+          #       stops. `/proc/meminfo` is recorded before each attempt because a
+          #       fork that cannot commit is one candidate cause -- it reproduces
+          #       locally on a machine that is short of memory (`MEM_COMMIT
+          #       failed, Win32 error 1455`) -- and the CI log showing 13 GB free
+          #       is what rules that cause out here.
           echo "=== memory before the build ==="
           # MSYS2 has no `free`; /proc/meminfo is the one that exists.
           head -5 /proc/meminfo || true
+
+          # The process tree, to a file. Ninja buffers a command's output until
+          # the command exits, so a command that hangs writes nothing and the
+          # build log cannot name it. This can.
+          heartbeat_log="${RUNNER_TEMP:-/tmp}/build-heartbeat.log"
+          : > "${heartbeat_log}"
+          (
+            while :; do
+              sleep 30
+              {
+                printf '=== %s ===\n' "$(date -u +%H:%M:%SZ)"
+                ps 2>/dev/null | tail -n +2 | while read -r pid _; do
+                  printf '  [%s] cwd=%s\n' \
+                    "$(tr '\0' ' ' < "/proc/${pid}/cmdline" 2>/dev/null | cut -c1-160)" \
+                    "$(readlink "/proc/${pid}/cwd" 2>/dev/null | sed 's|.*/build/thirdparty/|tp/|')"
+                done || true
+              } >> "${heartbeat_log}" 2>&1
+            done
+          ) &
+          heartbeat=$!
+          trap 'kill "${heartbeat}" 2>/dev/null || true' EXIT
+
           for attempt in 1 2; do
             echo "=== build attempt ${attempt}/2 ==="
             if timeout --signal=TERM 3600 \
                  make TARGET=win32 -j1 NINJAFLAGS=-j2 USE_NO_CCACHE=1; then
               break
             fi
+            echo "=== last processes seen, attempt ${attempt} ==="
+            awk '/^=== /{buf=""} {buf = buf $0 "\n"} END{printf "%s", buf}' \
+              "${heartbeat_log}" || true
             echo "=== memory after attempt ${attempt} ==="
-            { free -m || cat /proc/meminfo | head -5; } || true
+            head -5 /proc/meminfo || true
             if [ "${attempt}" = 2 ]; then
               echo "build failed twice; giving up" >&2
               exit 1

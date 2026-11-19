@@ -341,29 +341,38 @@ jobs:
           pacman -Q | grep -E '^mingw-w64-x86_64-(gcc|binutils|cmake|ninja|make|crt|headers|winpthreads|libwinpthread)' || true
 
           # NOTE: `VERBOSE=1` does *not* help here, and it was worth learning why:
-          #       ninja runs up to `-j4` edges at once and buffers each one's
-          #       output, printing it only when that edge finishes. A command that
-          #       never returns therefore never appears in the log at all -- the
-          #       log just stops at whatever finished last. What is needed is the
-          #       process tree, so the heartbeat prints it.
+          #       ninja runs several edges at once and buffers each one's output,
+          #       printing it only when that edge finishes. A command that never
+          #       returns therefore never appears in the log at all -- the log
+          #       just stops at whatever finished last. What is needed is the
+          #       process tree.
+          #
+          #       It goes to a file, not to stdout. Printing it every minute was
+          #       what filled the log: a two-hour run came back as 1440 lines with
+          #       every heartbeat gone, so the one thing it existed to record was
+          #       the thing that got dropped. Kept on disk, it survives, and the
+          #       wrapper below prints only the last sample after a stall.
           #
           #       `NINJA_STATUS` is likewise invisible: it is only drawn on a tty.
           export NINJA_STATUS="[ninja %f/%t %r running] "
+          heartbeat_log="${RUNNER_TEMP:-/tmp}/build-heartbeat.log"
+          : > "${heartbeat_log}"
 
           (
             while :; do
-              sleep 60
-              printf '[heartbeat] %s\n' "$(date -u +%H:%M:%SZ)"
-              # The point of the exercise: which commands are still running, and
-              # what they are. `ps` without `-W` lists only the MSYS processes,
-              # which is what the build runs as, and its first column is the PID
-              # that `/proc` is keyed on -- the Windows PID in column four is
-              # not. The command line names the project, and so does the cwd.
-              ps 2>/dev/null | tail -n +2 | while read -r pid _; do
-                printf '  [%s] cwd=%s\n' \
-                  "$(tr '\0' ' ' < "/proc/${pid}/cmdline" 2>/dev/null | cut -c1-200)" \
-                  "$(readlink "/proc/${pid}/cwd" 2>/dev/null | sed 's|.*/build/thirdparty/|tp/|')"
-              done || true
+              sleep 30
+              {
+                printf '=== %s ===\n' "$(date -u +%H:%M:%SZ)"
+                # `ps` without `-W` lists only the MSYS processes, which is what
+                # the build runs as, and its first column is the PID that `/proc`
+                # is keyed on -- the Windows PID in column four is not. The
+                # command line names the project, and so does the cwd.
+                ps 2>/dev/null | tail -n +2 | while read -r pid _; do
+                  printf '  [%s] cwd=%s\n' \
+                    "$(tr '\0' ' ' < "/proc/${pid}/cmdline" 2>/dev/null | cut -c1-160)" \
+                    "$(readlink "/proc/${pid}/cwd" 2>/dev/null | sed 's|.*/build/thirdparty/|tp/|')"
+                done || true
+              } >> "${heartbeat_log}" 2>&1
             done
           ) &
           heartbeat=$!
@@ -383,14 +392,13 @@ jobs:
           #       `$(ALLOCATED_CORES)` and passes it down. `NINJAFLAGS` puts the
           #       parallelism back at the level that does the compiling.
           #
-          #       Two jobs, not four. The stall these runners hit is a fork that
-          #       fails at `MEM_COMMIT` -- `fatal error in forked process -
-          #       MEM_COMMIT failed, Win32 error 1455`, i.e.
-          #       ERROR_COMMITMENT_LIMIT -- which reproduces on a fresh MSYS2 with
-          #       the same gcc whenever the machine is short of memory, and does
-          #       not when it is not. Four concurrent translation units is what
-          #       sets the peak; two keeps it reachable. `free` is printed before
-          #       each attempt so a future hang has the number next to it.
+          #       Two jobs, not four. Whatever the stall is, four concurrent
+          #       translation units is what sets the resource peak, and the peak
+          #       is when it happens. `/proc/meminfo` is printed before each
+          #       attempt because a fork that cannot commit is one of the
+          #       candidate causes -- it reproduces on a local machine that is
+          #       short of memory (`MEM_COMMIT failed, Win32 error 1455`), and the
+          #       CI log showing 13 GB free is what rules it out there.
           echo "=== memory before the build ==="
           # MSYS2 has no `free`; /proc/meminfo is the one that exists.
           head -5 /proc/meminfo || true
@@ -400,6 +408,14 @@ jobs:
                  make TARGET=win32 base -j1 NINJAFLAGS=-j2; then
               break
             fi
+            # What was running when it stopped. The build's own log cannot say:
+            # ninja buffers a command's output until that command exits, so a
+            # command that never exits writes nothing. The heartbeat file can.
+            echo "=== last processes seen, attempt ${attempt} ==="
+            awk '/^=== /{buf=""} {buf = buf $0 "\n"} END{printf "%s", buf}' \
+              "${heartbeat_log}" || true
+            echo "=== memory after attempt ${attempt} ==="
+            head -5 /proc/meminfo || true
             if [ "${attempt}" = 2 ]; then
               echo "build failed twice; giving up" >&2
               exit 1
