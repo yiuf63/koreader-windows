@@ -125,7 +125,7 @@ jobs:
           pacman -Q | grep -E '^mingw-w64-x86_64-(gcc|binutils|cmake|ninja|make|crt|headers|winpthreads|libwinpthread)' || true
 
       - name: Build
-        timeout-minutes: 120
+        timeout-minutes: 330
         # `USE_NO_CCACHE=1`: the runner ships Strawberry Perl's ccache, which the
         # build picks up via `command -v ccache`. Its path is a Windows one
         # (`C:\Strawberry\c\bin\ccache`), and passing that through the MSYS shell
@@ -219,9 +219,24 @@ jobs:
           heartbeat=$!
           trap 'kill "${heartbeat}" 2>/dev/null || true' EXIT
 
-          for attempt in 1 2; do
-            echo "=== build attempt ${attempt}/2 ==="
-            if run_attempt 3600 \
+          # A stall costs one attempt, so the budget is spent on attempts rather
+          # than on one long one. The stall is a single `cmake` that parks inside
+          # its own `CMakeScratch/TryCompile-*` directory and never returns; the
+          # same probe takes 3.6 seconds here. It is not memory (the runner
+          # reports 13 GB free), not `gendef` (it succeeds on every library), not
+          # two configures colliding (the heartbeat caught exactly one `cmake`
+          # process), and not the toolchain (gcc 16.1/16.2 and cmake 4.3/4.4/4.5
+          # all build this tree locally). What is left is that it is intermittent
+          # on the runner, so more attempts is what actually raises the odds.
+          #
+          # Five attempts of 50 minutes: a clean build takes well under that (the
+          # one green run did the whole job in 14 minutes at -j4), and GitHub
+          # caps a job at six hours, so this fits with room to spare.
+          max_attempts=5
+          attempt=1
+          while [ "${attempt}" -le "${max_attempts}" ]; do
+            echo "=== build attempt ${attempt}/${max_attempts} ==="
+            if run_attempt 3000 \
                  make TARGET=win32 -j1 NINJAFLAGS=-j2 USE_NO_CCACHE=1; then
               break
             fi
@@ -230,11 +245,12 @@ jobs:
               "${heartbeat_log}" || true
             echo "=== memory after attempt ${attempt} ==="
             head -5 /proc/meminfo || true
-            if [ "${attempt}" = 2 ]; then
-              echo "build failed twice; giving up" >&2
+            attempt=$((attempt + 1))
+            if [ "${attempt}" -gt "${max_attempts}" ]; then
+              echo "build failed ${max_attempts} times; giving up" >&2
               exit 1
             fi
-            echo "attempt ${attempt} did not finish; retrying" >&2
+            echo "attempt ${attempt} of ${max_attempts}; retrying" >&2
           done
           grep -m1 CMAKE_COMMAND:INTERNAL \
             base/build/x86_64-w64-mingw32/cmake/CMakeCache.txt || true
