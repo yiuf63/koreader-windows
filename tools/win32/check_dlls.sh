@@ -19,9 +19,27 @@ set -u
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 KD="${1:-${ROOT}/koreader-win32-x86_64-w64-mingw32/koreader}"
 
+# `libs/` is a *symlink* into the build tree, and creating one on Windows needs
+# SeCreateSymbolicLinkPrivilege. GitHub's runners do not grant it, so `ln -s`
+# silently produces nothing there and the install tree comes out without `libs`
+# (or `common`). Rather than fail the check on that -- the DLLs exist, they are
+# just one directory over -- resolve the build tree directly.
+#
+# `-e` rather than `-d`: a symlink whose target is missing is not a directory,
+# and that is exactly the broken case to fall through.
 if [ ! -d "${KD}/libs" ]; then
-    echo "error: no libs/ in ${KD} — build first" >&2
-    exit 1
+    build_libs="${ROOT}/base/build/x86_64-w64-mingw32/libs"
+    if [ -d "${build_libs}" ]; then
+        echo "note: ${KD}/libs is absent (symlink not created); using ${build_libs}" >&2
+        LIBS_DIR="${build_libs}"
+        COMMON_DIR="${ROOT}/base/build/x86_64-w64-mingw32/common"
+    else
+        echo "error: no libs/ in ${KD}, and no ${build_libs} — build first" >&2
+        exit 1
+    fi
+else
+    LIBS_DIR="${KD}/libs"
+    COMMON_DIR="${KD}/common"
 fi
 
 command -v objdump >/dev/null 2>&1 || {
@@ -54,7 +72,7 @@ is_system() {
 }
 
 # Everywhere the loader will look, in the order PE uses.
-search_dirs="${KD} ${KD}/libs ${KD}/common /c/Windows/System32"
+search_dirs="${KD} ${LIBS_DIR} ${COMMON_DIR} /c/Windows/System32"
 
 resolve() {
     local want="$1"
@@ -67,7 +85,7 @@ resolve() {
 missing_total=0
 checked=0
 
-for dll in "${KD}"/*.dll "${KD}"/libs/*.dll "${KD}"/common/*.dll; do
+for dll in "${KD}"/*.dll "${LIBS_DIR}"/*.dll "${COMMON_DIR}"/*.dll; do
     [ -f "${dll}" ] || continue
     checked=$((checked + 1))
     name="$(basename "${dll}")"

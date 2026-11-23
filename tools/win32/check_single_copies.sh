@@ -28,12 +28,22 @@ set -u
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 KD="${1:-${ROOT}/koreader-win32-x86_64-w64-mingw32/koreader}"
 
+# `libs/` is a symlink into the build tree, and creating one on Windows needs
+# SeCreateSymbolicLinkPrivilege -- which GitHub's runners do not grant, leaving
+# the install tree without it. The DLLs are one directory over; check those.
 if [ ! -d "${KD}/libs" ]; then
-    echo "error: no libs/ in ${KD}" >&2
-    exit 1
+    build_libs="${ROOT}/base/build/x86_64-w64-mingw32/libs"
+    if [ -d "${build_libs}" ]; then
+        echo "note: ${KD}/libs is absent (symlink not created); using ${build_libs}" >&2
+        LIBS="${build_libs}"
+    else
+        echo "error: no libs/ in ${KD}, and no ${build_libs}" >&2
+        exit 1
+    fi
+else
+    LIBS="${KD}/libs"
 fi
 
-LIBS="${KD}/libs"
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
