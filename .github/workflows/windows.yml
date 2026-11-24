@@ -170,27 +170,75 @@ jobs:
           # MSYS2 has no `free`; /proc/meminfo is the one that exists.
           head -5 /proc/meminfo || true
 
-          # Run one attempt, killing the *whole process group* when it is out of
-          # time.
+          # Run one attempt, and stop it as soon as it is either out of time or
+          # visibly stuck.
           #
-          # `timeout(1)` alone does not: it signals its direct child, and this
-          # build's children are `make` -> `ninja` -> `cc1plus`/`cmake`. The first
-          # attempt's `timeout` fired at 60 minutes and left the ninja and compiler
-          # processes alive, so the second `make` inherited a half-built directory
-          # and blocked behind them -- the log then shows nothing but the
-          # heartbeat's own `+ sleep 30` until the step is killed at 120 minutes.
-          # Reproduced: `timeout --signal=TERM 3 bash -c 'sleep 300 & wait'`
-          # returns but leaves `sleep` running; `setsid` plus `kill -- -PID` takes
-          # the group with it.
+          # `timeout(1)` alone does not even do the first part: it signals its
+          # direct child, and this build's children are `make` -> `ninja` ->
+          # `cc1plus`/`cmake`. The first attempt's `timeout` fired at 60 minutes
+          # and left the ninja and compiler processes alive, so the second `make`
+          # inherited a half-built directory and blocked behind them -- the log
+          # then shows nothing but the heartbeat's own `+ sleep 30` until the step
+          # is killed. Reproduced: `timeout --signal=TERM 3 bash -c 'sleep 300 &
+          # wait'` returns but leaves `sleep` running; `setsid` plus `kill -- -PID`
+          # takes the group with it.
+          #
+          # The stall check: a hung build looks identical from the outside every
+          # 30 seconds -- same processes, same state -- while a working one moves
+          # through projects and its process set changes. If the fingerprint holds
+          # still for STALL_MINUTES, stop that attempt and report, so the retry
+          # starts in seconds instead of after the full limit. `-j2` lets a
+          # compile hold a slot for a while, so the window is generous; the hang
+          # it must catch sits unchanged for an hour.
+          STALL_MINUTES="${STALL_MINUTES:-5}"
+
+          # `LC_ALL=C` because the command lines can contain non-ASCII (the tree
+          # has UTF-8 paths) and `sort` errors out on those under the runner's
+          # locale, which would make every sample differ and the check never fire.
+          # `/proc/${pid}` can also vanish between `ps` and the read; an empty
+          # line for it is fine, it just must not break the pipeline.
+          fingerprint() {
+            ps 2>/dev/null | tail -n +2 | while read -r pid _; do
+              printf '%s %s\n' \
+                "$(sed -n 's/^State:\s*//p' "/proc/${pid}/status" 2>/dev/null | cut -c1)" \
+                "$(tr '\0' ' ' < "/proc/${pid}/cmdline" 2>/dev/null | cut -c1-80)"
+            done | LC_ALL=C sort
+          }
+
           run_attempt() {
             limit=$1; shift
             setsid "$@" &
             local pgid=$!
+            local stall_ticks=$(( STALL_MINUTES * 2 ))
             (
-              sleep "${limit}"
-              kill -TERM -- "-${pgid}" 2>/dev/null || true
-              sleep 5
-              kill -KILL -- "-${pgid}" 2>/dev/null || true
+              ticks=0
+              stuck=0
+              last=""
+              while :; do
+                sleep 30
+                ticks=$((ticks + 1))
+                now=$(fingerprint)
+                if [ -n "${last}" ] && [ "${now}" = "${last}" ]; then
+                  stuck=$((stuck + 1))
+                else
+                  stuck=0
+                  last="${now}"
+                fi
+                if [ "${stuck}" -ge "${stall_ticks}" ]; then
+                  echo "=== no process change for ${STALL_MINUTES} minutes; stopping this attempt ===" >&2
+                  echo "${now}" >&2
+                  kill -TERM -- "-${pgid}" 2>/dev/null || true
+                  sleep 5
+                  kill -KILL -- "-${pgid}" 2>/dev/null || true
+                  exit 0
+                fi
+                if [ "${ticks}" -ge "$(( limit / 30 ))" ]; then
+                  kill -TERM -- "-${pgid}" 2>/dev/null || true
+                  sleep 5
+                  kill -KILL -- "-${pgid}" 2>/dev/null || true
+                  exit 0
+                fi
+              done
             ) &
             local watcher=$!
             wait "${pgid}"; local rc=$?
@@ -200,20 +248,16 @@ jobs:
 
           # The process tree, to a file. Ninja buffers a command's output until
           # the command exits, so a command that hangs writes nothing and the
-          # build log cannot name it. This can.
+          # build log cannot name it. This can, and it records `State` plus the
+          # open descriptors: an `S` process is waiting on something and the fds
+          # say on what, an `R` one spinning is a different bug, a `Z` means the
+          # parent stopped reaping. cwd alone only says where it was.
           heartbeat_log="${RUNNER_TEMP:-/tmp}/build-heartbeat.log"
           : > "${heartbeat_log}"
           (
             while :; do
               sleep 30
-              {
-                printf '=== %s ===\n' "$(date -u +%H:%M:%SZ)"
-                ps 2>/dev/null | tail -n +2 | while read -r pid _; do
-                  printf '  [%s] cwd=%s\n' \
-                    "$(tr '\0' ' ' < "/proc/${pid}/cmdline" 2>/dev/null | cut -c1-160)" \
-                    "$(readlink "/proc/${pid}/cwd" 2>/dev/null | sed 's|.*/build/thirdparty/|tp/|')"
-                done || true
-              } >> "${heartbeat_log}" 2>&1
+              tools/win32/dump-process-state.sh >> "${heartbeat_log}" 2>&1 || true
             done
           ) &
           heartbeat=$!
@@ -241,6 +285,9 @@ jobs:
               break
             fi
             echo "=== last processes seen, attempt ${attempt} ==="
+            # The last sample, plus the state and descriptors that name what it
+            # was waiting on. `awk` keeps only the final block, so a run of 60
+            # identical samples does not bury it.
             awk '/^=== /{buf=""} {buf = buf $0 "\n"} END{printf "%s", buf}' \
               "${heartbeat_log}" || true
             echo "=== memory after attempt ${attempt} ==="
