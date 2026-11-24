@@ -34,7 +34,7 @@ sample() {
     ps 2>/dev/null | tail -n +2 | while read -r pid _; do
         [ -n "${pid}" ] || continue
 
-        cmd=$(tr '\0' ' ' < "/proc/${pid}/cmdline" 2>/dev/null | cut -c1-140)
+        cmd=$(tr '\0' ' ' <"/proc/${pid}/cmdline" 2>/dev/null | cut -c1-140)
         [ -n "${cmd}" ] || continue
 
         state=$(sed -n 's/^State:\s*//p' "/proc/${pid}/status" 2>/dev/null)
@@ -49,9 +49,8 @@ sample() {
         for fd in /proc/"${pid}"/fd/*; do
             [ -e "${fd}" ] || continue
             tgt=$(readlink "${fd}" 2>/dev/null)
-            case "${tgt}" in
-                /dev/null|/dev/console|/dev/tty*|*'/msys-'*|'') continue ;;
-            esac
+            [ -n "${tgt}" ] || continue
+            printf '%s\n' "${tgt}" | grep -qE '^(/dev/(null|console|tty)|.*/msys-)' && continue
             printf '       fd %s -> %s\n' "$(basename "${fd}")" "${tgt}"
         done
     done
@@ -61,7 +60,7 @@ if [ "${1:-}" = "--once" ]; then
     sample
 else
     while :; do
-        sample >> "${OUT}" 2>&1
+        sample >>"${OUT}" 2>&1
         sleep 30
     done
 fi
