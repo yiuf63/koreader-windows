@@ -191,12 +191,21 @@ jobs:
           run xcode-select -p
 
       - name: Setup build environment
-        # `msys2 {0}` for the Windows target: this step runs `make`, and under
-        # plain `bash` (Git Bash on Windows) there is no `ninja`, no `make` and no
-        # MSYS runtime -- it fails with `ninja not found in PATH` and
-        # `unsupported operating system: MINGW64_NT`. Every other target keeps
-        # the default shell.
-        shell: ${{ matrix.target == 'win32' && 'msys2 {0}' || 'bash' }}
+        # Two steps rather than one with an expression in `shell:`: GitHub does
+        # not allow `matrix` in the `shell` key, and the run is reported under the
+        # workflow file name when it does -- which is how this was caught.
+        #
+        # Windows needs `msys2 {0}`: this step runs `make`, and plain `bash` on a
+        # Windows runner is Git Bash, with no `ninja`, no `make` and no MSYS
+        # runtime (`uname` reports `MINGW64_NT`, and `make` fails with
+        # `ninja not found in PATH`).
+        if: matrix.target == 'win32'
+        shell: msys2 {0}
+        run: ./.ci/build_environment_setup.sh '${{ toJSON(matrix) }}'
+
+      - name: Setup build environment (non-Windows)
+        if: matrix.target != 'win32'
+        shell: bash
         run: ./.ci/build_environment_setup.sh '${{ toJSON(matrix) }}'
 
       # }}}
