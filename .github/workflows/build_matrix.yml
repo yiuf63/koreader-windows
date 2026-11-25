@@ -191,7 +191,12 @@ jobs:
           run xcode-select -p
 
       - name: Setup build environment
-        shell: bash
+        # `msys2 {0}` for the Windows target: this step runs `make`, and under
+        # plain `bash` (Git Bash on Windows) there is no `ninja`, no `make` and no
+        # MSYS runtime -- it fails with `ninja not found in PATH` and
+        # `unsupported operating system: MINGW64_NT`. Every other target keeps
+        # the default shell.
+        shell: ${{ matrix.target == 'win32' && 'msys2 {0}' || 'bash' }}
         run: ./.ci/build_environment_setup.sh '${{ toJSON(matrix) }}'
 
       # }}}
