@@ -611,7 +611,31 @@ jobs:
 
       - name: Update translations
         if: matrix.artifacts
-        run: make po mo
+        # NOTE: on Windows the `l10n` submodule comes out of `actions/checkout`
+        #       with CRLF line endings (`core.autocrlf` is true on the runners),
+        #       so every `.po` reads as locally modified -- and `make po` starts
+        #       with `git submodule update --remote l10n`, which refuses to switch
+        #       with a dirty tree:
+        #
+        #           error: Your local changes to the following files would be overwritten by checkout:
+        #               ca/koreader.po ... zh_TW/koreader.po
+        #           fatal: Unable to checkout ... in submodule path 'l10n'
+        #
+        #       That is why `Release` failed every night. The translations are
+        #       LF in the repository, so turning the conversion off for this
+        #       submodule makes the checkout match its index again; the `.mo`
+        #       files `make mo` produces are unaffected either way.
+        run: |
+          if [ -d l10n/.git ] || [ -f l10n/.git ]; then
+            git -C l10n config core.autocrlf false
+            git -C l10n config core.eol lf
+            # Re-materialise the working tree from the index under the new
+            # setting, so the files are LF rather than the CRLF copies that are
+            # there now. `checkout .` is safe here: the only difference being
+            # discarded is line-ending noise.
+            git -C l10n checkout -- . 2>/dev/null || true
+          fi
+          make po mo
 
       - name: Generate artifacts
         if: matrix.artifacts && matrix.target != 'win32'
