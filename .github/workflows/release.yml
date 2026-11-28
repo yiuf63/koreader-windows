@@ -103,6 +103,17 @@ jobs:
     permissions:
       contents: write
     runs-on: ubuntu-26.04
+    # This job assembles an upstream-shaped release from the build artifacts and
+    # its scripts parse the asset names with `jq`. This fork's version string is
+    # `v2026.10-win32.7`, so they do not match:
+    #
+    #     jq: error (at <unknown>): unsupported asset:
+    #         .../koreader-android-arm-v2026.10-win32.7-3-ga805960_2026-11-28.apk
+    #
+    # It fires on the daily schedule and on every tag, so it is a nightly red run
+    # for a release this fork publishes by hand (`gh release create`) anyway.
+    # `continue-on-error` keeps it running and visible without failing the run.
+    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
