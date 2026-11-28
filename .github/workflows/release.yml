@@ -62,6 +62,15 @@ jobs:
     needs: build
     environment: android
     runs-on: ubuntu-26.04
+    # A fork cannot sign the Android APKs: `APK_SIGN_KEY_ALIAS`,
+    # `APK_SIGN_KEY_PASS`, `APK_SIGN_STORE_BASE64` and `APK_SIGN_STORE_PASS` are
+    # repository secrets that only exist upstream, so this job always fails here
+    # with an empty key alias. It used to fail the whole `Release` run, and
+    # `Release` is scheduled daily -- a nightly failure mail for a key that
+    # cannot be obtained. `continue-on-error` keeps the step's outcome visible in
+    # the run without failing the workflow, and without deleting the job, so an
+    # upstream change to it still merges cleanly.
+    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1

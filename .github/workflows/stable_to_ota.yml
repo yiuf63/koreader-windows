@@ -26,6 +26,14 @@ jobs:
   upload_to_ota:
     name: Upload to OTA
     runs-on: ubuntu-26.04
+    # The OTA uploader only accepts the asset names upstream publishes, and this
+    # fork's releases carry `koreader-win32-...zip` instead:
+    #
+    #     error (at <unknown>): unsupported asset: .../koreader-win32-x86_64-...zip
+    #
+    # It fires on `release: released`, so every release from this fork turns the
+    # workflow red for a file upstream would not distribute anyway.
+    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
